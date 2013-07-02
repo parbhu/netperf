@@ -1003,6 +1003,14 @@ process_requests()
       }
       break;
 
+    case DO_TIPC_STREAM:
+	recv_tipc_stream();
+	break;
+
+    case DO_TIPC_RR:
+	recv_tipc_rr();
+	break; 
+
     default:
       fprintf(where,"unknown test number %d\n",
 	      netperf_request.content.request_type);

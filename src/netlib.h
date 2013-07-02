@@ -229,6 +229,9 @@
 #define         DO_SYSINFO                 600
 #define         SYSINFO_RESPONSE           601
 
+#define 	DO_TIPC_STREAM		   700
+#define		DO_TIPC_RR		   701
+
 #if HAVE_INTTYPES_H
 # include <inttypes.h>
 #else

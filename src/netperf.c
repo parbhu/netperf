@@ -284,6 +284,12 @@ main(int argc, char *argv[])
     print_uuid(host_name);
   }
 #endif
+  else if (strcasecmp(test_name,"TIPC_STREAM") == 0) {
+    send_tipc_stream(host_name);
+  }
+  else if (strcasecmp(test_name,"TIPC_RR") == 0) {
+    send_tipc_rr(host_name);
+  }
   else {
     printf("The test you requested (%s) is unknown to this netperf.\n"
 	   "Please verify that you have the correct test name, \n"
