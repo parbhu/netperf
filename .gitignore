@@ -16,7 +16,9 @@ config.status
 netperf.spec
 src/.deps
 src/netperf_version.h
-doc/
+doc/*
+doc/netperf.html
 autom4te.cache/
 src/netperf
 src/netserver
+netserver_output
