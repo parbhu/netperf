@@ -37,7 +37,7 @@ struct tipc_stream_request_struct {
 struct tipc_stream_response_struct {
   struct tipc_portid id;
   int   recv_buf_size;    /* how big does the client want it      */
-  //int   receive_size;
+  int   receive_size;
   int   no_delay;
   int   measure_cpu;      /* does the client want server cpu      */
   //int   test_length;    /* how long is the test?                */

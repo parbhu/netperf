@@ -231,6 +231,7 @@
 
 #define 	DO_TIPC_STREAM		   700
 #define		DO_TIPC_RR		   701
+#define		TIPC_STREAM_RESPONSE	   702
 
 #if HAVE_INTTYPES_H
 # include <inttypes.h>
