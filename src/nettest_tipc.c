@@ -23,6 +23,79 @@ static  int confidence_iteration;
 static  char  local_cpu_method;
 static  char  remote_cpu_method;
 
+void
+print_top_tipc_test_header(char test_name[]) 
+{
+  char *address_buf;
+
+  address_buf = malloc(16); /* magic constant */
+
+  if (address_buf == NULL) {
+    fprintf(where,"Unable to allocate address_buf\n");
+    fflush(where);
+    exit(1);
+  }
+
+  /* we want to have some additional, interesting information in the
+     headers. we know some of it here, but not all, so we will only
+     print the test title here and will print the results titles after
+     the test is finished */
+  fprintf(where,"%s",test_name);
+
+  if (iteration_max > 1) {
+    fprintf(where,
+            " : +/-%.3f%% @ %2d%% conf. %s",
+            interval/0.02,
+            confidence_level,
+            result_confidence_only ? " on result only" : "");
+  }
+    if ((loc_nodelay > 0) || (rem_nodelay > 0)) {
+    fprintf(where," : nodelay");
+  }
+  if ((loc_sndavoid > 0) ||
+      (loc_rcvavoid > 0) ||
+      (rem_sndavoid > 0) ||
+      (rem_rcvavoid > 0)) {
+    fprintf(where," : copy avoidance");
+  }
+
+  if (no_control) {
+    fprintf(where," : no control");
+  }
+
+#ifdef WANT_HISTOGRAM
+  fprintf(where," : histogram");
+#endif /* WANT_HISTOGRAM */
+
+#ifdef WANT_INTERVALS
+#ifndef WANT_SPIN
+  fprintf(where," : interval");
+#else
+  fprintf(where," : spin interval");
+#endif
+#endif /* WANT_INTERVALS */
+
+#ifdef DIRTY
+  fprintf(where," : dirty data");
+#endif /* DIRTY */
+#ifdef WANT_DEMO
+  fprintf(where," : demo");
+#endif
+//#ifdef WANT_FIRST_BURST
+  /* a little hokey perhaps, but we really only want this to be
+     emitted for tests where it actually is used, which means a
+     "REQUEST/RESPONSE" test. raj 2005-11-10 */
+//  if (strstr(test_name,"REQUEST/RESPONSE")) {
+//    fprintf(where," : first burst %d",first_burst_size);
+//  }
+//#endif
+  if (cpu_binding_requested) {
+    fprintf(where," : cpu bind");
+  }
+  fprintf(where,"\n");
+
+  free(address_buf);
+}
 
 void 
 send_tipc_stream(char remote_host[]) 
@@ -135,9 +208,9 @@ Size (bytes)\n\
   //                     IPPROTO_TCP,
   //                     0);
 
-  //if ( print_headers ) {
-  //  print_top_test_header("TCP STREAM TEST",local_res,remote_res);
-  //}
+  if ( print_headers ) {
+    print_top_tipc_test_header("TIPC STREAM TEST");
+  }
 
   send_ring = NULL;
   confidence_iteration = 1;
