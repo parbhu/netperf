@@ -12,7 +12,6 @@
 #include <string.h>             // memset
 #include <stdlib.h>		// exit 
 #include <errno.h>
-
 #include <linux/tipc.h>         // sockadd_tipc
 
 #include "netlib.h" 		// netperf_request_struct
@@ -90,7 +89,7 @@ Size (bytes)\n\
 #if defined(WIN32) && _MSC_VER <= 1200
   __int64 local_bytes_sent = 0
 #else
-  unsigned long long local_bytes_sent = 0;
+    unsigned long long local_bytes_sent = 0;
 #endif
 
   double        bytes_sent = 0.0;
@@ -129,12 +128,12 @@ Size (bytes)\n\
   /* must turn that into the test specific addressing information. */
 
   /* complete_addrinfos will either succede or exit the process */
-//  complete_addrinfos(&remote_res,
-//                     &local_res,
-//                     remote_host,
-//                     SOCK_STREAM,
-//                     IPPROTO_TCP,
-//                     0);
+  //  complete_addrinfos(&remote_res,
+  //                     &local_res,
+  //                     remote_host,
+  //                     SOCK_STREAM,
+  //                     IPPROTO_TCP,
+  //                     0);
 
   //if ( print_headers ) {
   //  print_top_test_header("TCP STREAM TEST",local_res,remote_res);
@@ -162,7 +161,7 @@ Size (bytes)\n\
     times_up       =    0;
 
     /*set up the data socket                        */
-//    send_socket = create_data_socket(local_res);
+    //    send_socket = create_data_socket(local_res);
 
 
 
@@ -210,7 +209,7 @@ Size (bytes)\n\
                                        local_send_offset);
     }
 
-	/* If the user has requested cpu utilization measurements, we must */
+    /* If the user has requested cpu utilization measurements, we must */
     /* calibrate the cpu(s). We will perform this task within the tests */
     /* themselves. If the user has specified the cpu rate, then */
     /* calibrate_local_cpu will return rather quickly as it will have */
@@ -257,7 +256,7 @@ Size (bytes)\n\
 
       if (debug > 1) {
         fprintf(where,
-             "netperf: send_tipc_stream: requesting TIPC stream test\n");
+		"netperf: send_tipc_stream: requesting TIPC stream test\n");
       }
 
       send_request();
@@ -278,7 +277,7 @@ Size (bytes)\n\
       if (!netperf_response.content.serv_errno) {
         if (debug)
           fprintf(where,"remote listen done.\n");
-        remote_port_id = tipc_stream_response->id;    
+        remote_port_id = tipc_stream_response->id;
         rsr_size              = tipc_stream_response->recv_buf_size;
         rss_size              = tipc_stream_response->send_buf_size;
         rem_nodelay     =       tipc_stream_response->no_delay;
@@ -297,8 +296,8 @@ Size (bytes)\n\
       else {
         Set_errno(netperf_response.content.serv_errno);
         fprintf(where,
-               "netperf: remote error %d",
-               netperf_response.content.serv_errno);
+		"netperf: remote error %d",
+		netperf_response.content.serv_errno);
         perror("");
         fflush(where);
 
@@ -334,13 +333,13 @@ Size (bytes)\n\
     }
 
 #ifdef WIN32
-  /* this is used so the timer thread can close the socket out from */
-  /* under us, which to date is the easiest/cleanest/least */
-  /* Windows-specific way I can find to force the winsock calls to */
-  /* return WSAEINTR with the test is over. anything that will run on */
-  /* 95 and NT and is closer to what netperf expects from Unix signals */
-  /* and such would be appreciated raj 1/96 */
-  win_kludge_socket = send_socket;
+    /* this is used so the timer thread can close the socket out from */
+    /* under us, which to date is the easiest/cleanest/least */
+    /* Windows-specific way I can find to force the winsock calls to */
+    /* return WSAEINTR with the test is over. anything that will run on */
+    /* 95 and NT and is closer to what netperf expects from Unix signals */
+    /* and such would be appreciated raj 1/96 */
+    win_kludge_socket = send_socket;
 #endif /* WIN32 */
     
     /* Data Socket set-up is finished. If there were problems, either */
@@ -387,9 +386,9 @@ Size (bytes)\n\
     /* before we start, initialize a few variables */
 
 #ifdef WANT_DEMO
-      if (demo_mode) {
-        demo_first_timestamp();
-      }
+    if (demo_mode) {
+      demo_first_timestamp();
+    }
 #endif
 
 
@@ -403,39 +402,41 @@ Size (bytes)\n\
 
 #ifdef DIRTY
       access_buffer(send_ring->buffer_ptr,
-                    send_size,
-                    loc_dirty_count,
-                    loc_clean_count);
+		    send_size,
+		    loc_dirty_count,
+		    loc_clean_count);
 #endif /* DIRTY */
 
 #ifdef WANT_HISTOGRAM
       if (verbosity > 1) {
-        /* timestamp just before we go into send and then again just
-         after we come out raj 8/94 */
-        /* but lets only do this if there is going to be a histogram
-           displayed */
-        HIST_timestamp(&time_one);
+	/* timestamp just before we go into send and then again just
+	   after we come out raj 8/94 */
+	/* but lets only do this if there is going to be a histogram
+	   displayed */
+	HIST_timestamp(&time_one);
       }
 #endif /* WANT_HISTOGRAM */
+
       if((len=send(send_socket,
-                   send_ring->buffer_ptr,
-                   send_size,
-                   0)) != send_size) {
-      if ((len >=0) || SOCKET_EINTR(len)) {
-            /* the test was interrupted, must be the end of test */
-            break;
-          }
-        perror("netperf: data send error");
-        printf("len was %d\n",len);
-        exit(1);
+		   send_ring->buffer_ptr,
+		   send_size,
+		   0)) != send_size) {
+	if ((len >=0) || SOCKET_EINTR(len)) {
+	  /* the test was interrupted, must be the end of test */
+	  break;
+	}
+	printf("sent bytes: %llu\n", local_bytes_sent);
+	perror("netperf: data send error");
+	printf("len was %d\n",len);
+	exit(1);
       }
 
       local_bytes_sent += send_size;
 #ifdef WANT_HISTOGRAM
       if (verbosity > 1) {
-        /* timestamp the exit from the send call and update the histogram */
-        HIST_timestamp(&time_two);
-        HIST_add(time_hist,delta_micro(&time_one,&time_two));
+	/* timestamp the exit from the send call and update the histogram */
+	HIST_timestamp(&time_two);
+	HIST_add(time_hist,delta_micro(&time_one,&time_two));
       }
 #endif /* WANT_HISTOGRAM */
 
@@ -455,10 +456,12 @@ Size (bytes)\n\
       nummessages++;
       send_ring = send_ring->next;
       if (bytes_remaining) {
-        bytes_remaining -= send_size;
+	bytes_remaining -= send_size;
       }
-    }
 
+    }
+	
+    
     /* The test is over. Flush the buffers to the remote end. We do a */
     /* graceful release to insure that all data has been taken by the */
     /* remote. */
@@ -479,9 +482,9 @@ Size (bytes)\n\
     /* brought all the data up into the application. it will do a */
     /* shutdown to cause a FIN to be sent our way. We will assume that */
     /* any exit from the recv() call is good... raj 4/93 */
-
-    printf("Waiting for receive.\n");
+ 
     recv(send_socket, send_ring->buffer_ptr, send_size, 0);
+
     /* this call will always give us the elapsed time for the test, and */
     /* will also store-away the necessaries for cpu utilization */
 
@@ -497,7 +500,7 @@ Size (bytes)\n\
 
 #if defined(WANT_INTERVALS)
 #ifdef WIN32
-  stop_itimer();
+    stop_itimer();
 #endif
 #endif /* WANT_INTERVALS */
 
@@ -507,7 +510,6 @@ Size (bytes)\n\
          things. If it wasn't supposed to care, it will return obvious
          values. */
 
-      printf("Waiting for second receive\n");
       recv_response();
       if (!netperf_response.content.serv_errno) {
         if (debug)
@@ -658,7 +660,7 @@ Size (bytes)\n\
     case 1:
     case 2:
       if (print_headers) {
-                fprintf(where,
+	fprintf(where,
                 cpu_title,
                 format_units(),
                 local_cpu_method,
@@ -695,7 +697,7 @@ Size (bytes)\n\
     case 1:
     case 2:
       if (print_headers) {
-                fprintf(where,tput_title,format_units());
+	fprintf(where,tput_title,format_units());
       }
       fprintf(where,
               tput_fmt_1,               /* the format string */
@@ -783,6 +785,10 @@ recv_tipc_stream()
   struct        tipc_stream_response_struct      *tipc_stream_response;
   struct        tipc_stream_results_struct       *tipc_stream_results;
 
+  /* Confirm that netperf_request is received - for debugging */
+  fp = fopen("netserver_output","a");
+  fprintf(fp, "netserver: TIPC stream test.\n");
+
 #ifdef DO_SELECT
   FD_ZERO(&readfds);
   timeout.tv_sec = 1;
@@ -842,25 +848,25 @@ recv_tipc_stream()
   loc_rcvavoid = tipc_stream_request->so_rcvavoid;
   loc_sndavoid = tipc_stream_request->so_sndavoid;
 
-//  set_hostname_and_port(local_name,
-//                        port_buffer,
-//                        nf_to_af(tcp_stream_request->ipfamily),
-//                        tcp_stream_request->port);
+  //  set_hostname_and_port(local_name,
+  //                        port_buffer,
+  //                        nf_to_af(tcp_stream_request->ipfamily),
+  //                        tcp_stream_request->port);
 
-//  local_res = complete_addrinfo(local_name,
-//                                local_name,
-//                                port_buffer,
-//                                nf_to_af(tcp_stream_request->ipfamily),
-//                                SOCK_STREAM,
-//                                IPPROTO_TCP,
-//                                0);
-//
-//  s_listen = create_data_socket(local_res);
-
-
+  //  local_res = complete_addrinfo(local_name,
+  //                                local_name,
+  //                                port_buffer,
+  //                                nf_to_af(tcp_stream_request->ipfamily),
+  //                                SOCK_STREAM,
+  //                                IPPROTO_TCP,
+  //                                0);
+  //
+  //  s_listen = create_data_socket(local_res);
 
 
-    /* Call to set_sock_buffer to set buffer size!!! */
+
+
+  /* Call to set_sock_buffer to set buffer size!!! */
 
 
 
@@ -882,20 +888,15 @@ recv_tipc_stream()
     exit(1);
   }
 
-  addrlen = sizeof(struct sockaddr_tipc);
   /* Get node name with getsockname */
+  addrlen = sizeof(struct sockaddr_tipc);
   memset(&myaddr_in, 0, sizeof(myaddr_in));
   if (getsockname(s_listen, 
-		(struct sockaddr*)&myaddr_in, 
-		&addrlen) != 0) {
+		  (struct sockaddr*)&myaddr_in, 
+		  &addrlen) != 0) {
     perror("tipc: getsockname failed.");
     exit(1);
   }
-
-  /* Print out node name => debugging */  
-  int n = myaddr_in.addr.id.node;
-  unsigned int ref = myaddr_in.addr.id.ref;
-  fprintf(fp, "Node: %d.%d.%d ref:%u\n", tipc_zone(n), tipc_cluster(n), tipc_node(n), ref);
 
   /* Netperf needs port_id of the tipc socket */ 
   tipc_stream_response->id = myaddr_in.addr.id;
@@ -960,24 +961,24 @@ recv_tipc_stream()
 
 
   /* now get the port number assigned by the system  */
-//  addrlen = sizeof(myaddr_in);
-//  if (getsockname(s_listen,
-//                  (struct sockaddr *)&myaddr_in,
-//                  &addrlen) == SOCKET_ERROR){
-//    netperf_response.content.serv_errno = errno;
-//    close(s_listen);
-//    send_response();
-//
-//    exit(1);
-//  }
+  //  addrlen = sizeof(myaddr_in);
+  //  if (getsockname(s_listen,
+  //                  (struct sockaddr *)&myaddr_in,
+  //                  &addrlen) == SOCKET_ERROR){
+  //    netperf_response.content.serv_errno = errno;
+  //    close(s_listen);
+  //    send_response();
+  //
+  //    exit(1);
+  //  }
 
   /* Now myaddr_in contains the port and the internet address this is */
   /* returned to the sender also implicitly telling the sender that the */
   /* socket buffer sizing has been done. */
 
-//  tcp_stream_response->data_port_number =
-//    (int) ntohs(((struct sockaddr_in *)&myaddr_in)->sin_port);
-//  netperf_response.content.serv_errno   = 0;
+  //  tcp_stream_response->data_port_number =
+  //    (int) ntohs(((struct sockaddr_in *)&myaddr_in)->sin_port);
+  //  netperf_response.content.serv_errno   = 0;
 
   /* But wait, there's more. If the initiator wanted cpu measurements, */
   /* then we must call the calibrate routine, which will return the max */
@@ -1009,8 +1010,8 @@ recv_tipc_stream()
   addrlen = sizeof(peeraddr_in);
 
   if ((s_data = accept(s_listen, 
-		(struct sockaddr *)&peeraddr_in, 
-		&addrlen)) == INVALID_SOCKET) {
+		       (struct sockaddr *)&peeraddr_in, 
+		       &addrlen)) == INVALID_SOCKET) {
     /* Let's just punt. The remote will be given some information */
     close(s_listen);
     exit(1);
@@ -1057,24 +1058,22 @@ recv_tipc_stream()
   bytes_received = 0;
   receive_calls  = 0;
 
-  while (!times_up && ((len = recv(s_data, recv_ring->buffer_ptr, recv_size, 0)) != 0)) {
-    if (len == SOCKET_ERROR ) {
-      if (times_up) {
-        break;
-      }
+  while (!times_up && (len = recv(s_data, recv_ring->buffer_ptr, recv_size, 0) )) {
+    if (len == SOCKET_ERROR) {
+      if (times_up)
+	break;
       netperf_response.content.serv_errno = errno;
       send_response();
       exit(1);
     }
     bytes_received += len;
     receive_calls++;
-
 #ifdef DIRTY
     /* we access the buffer after the recv() call now, rather than before */
     access_buffer(recv_ring->buffer_ptr,
                   recv_size,
-                  tipc_stream_request->dirty_count,
-                  tipc_stream_request->clean_count);
+                  tcp_stream_request->dirty_count,
+                  tcp_stream_request->clean_count);
 #endif /* DIRTY */
 
 
@@ -1086,20 +1085,19 @@ recv_tipc_stream()
 #endif /* PAUSE */
 
 #ifdef DO_SELECT
-        FD_SET(s_data,&readfds);
-        select(s_data+1,&readfds,NULL,NULL,&timeout);
+    FD_SET(s_data,&readfds);
+    select(s_data+1,&readfds,NULL,NULL,&timeout);
 #endif /* DO_SELECT */
-
   }
-
+  
   /* perform a shutdown to signal the sender that */
   /* we have received all the data sent. raj 4/93 */
 
   if (shutdown(s_data,SHUT_WR) == SOCKET_ERROR && !times_up) {
-      netperf_response.content.serv_errno = errno;
-      send_response();
-      exit(1);
-    }
+    netperf_response.content.serv_errno = errno;
+    send_response();
+    exit(1);
+  }
 
   cpu_stop(tipc_stream_request->measure_cpu,&elapsed_time);
 
