@@ -161,11 +161,8 @@ Size (bytes)\n\
      during a test... ;-) at some point, this should probably become a
      64bit integral type, but those are not entirely common
      yet... time passes, and 64 bit types do indeed become common. */
-//#if defined(WIN32) && _MSC_VER <= 1200
-//  __int64 local_bytes_sent = 0
-//#else
-    unsigned long long local_bytes_sent = 0;
-//#endif
+
+  unsigned long long local_bytes_sent = 0;
 
   double        bytes_sent = 0.0;
 
@@ -412,16 +409,6 @@ Size (bytes)\n\
       exit(1);
     }
 
-#ifdef WIN32
-    /* this is used so the timer thread can close the socket out from */
-    /* under us, which to date is the easiest/cleanest/least */
-    /* Windows-specific way I can find to force the winsock calls to */
-    /* return WSAEINTR with the test is over. anything that will run on */
-    /* 95 and NT and is closer to what netperf expects from Unix signals */
-    /* and such would be appreciated raj 1/96 */
-    win_kludge_socket = send_socket;
-#endif /* WIN32 */
-    
     /* Data Socket set-up is finished. If there were problems, either */
     /* the connect would have failed, or the previous response would */
     /* have indicated a problem. I failed to see the value of the */
@@ -572,12 +559,6 @@ Size (bytes)\n\
     /* the limit on maximum open files. */
 
     close(send_socket);
-
-#if defined(WANT_INTERVALS)
-#ifdef WIN32
-    stop_itimer();
-#endif
-#endif /* WANT_INTERVALS */
 
     if (!no_control) {
       /* Get the statistics from the remote end. The remote will have
@@ -992,13 +973,6 @@ recv_tipc_stream()
   set_sock_buffer (s_listen, RECV_BUFFER, lsr_size_req, &lsr_size);
 
 
-#ifdef WIN32
-  /* The test timer can fire during operations on the listening socket,
-     so to make the start_timer below work we have to move
-     it to close s_listen while we are blocked on accept. */
-  win_kludge_socket2 = s_listen;
-#endif
-
   /* what sort of sizes did we end-up with? */
   if (tipc_stream_request->receive_size == 0) {
     if (lsr_size > 0) {
@@ -1100,17 +1074,6 @@ recv_tipc_stream()
     close(s_listen);
     exit(1);
   }
-
-#ifdef WIN32
-  /* this is used so the timer thread can close the socket out from */
-  /* under us, which to date is the easiest/cleanest/least */
-  /* Windows-specific way I can find to force the winsock calls to */
-  /* return WSAEINTR with the test is over. anything that will run on */
-  /* 95 and NT and is closer to what netperf expects from Unix signals */
-  /* and such would be appreciated raj 1/96 */
-  win_kludge_socket = s_data;
-  win_kludge_socket2 = INVALID_SOCKET;
-#endif /* WIN32 */
 
   times_up = 0;
 
