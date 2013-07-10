@@ -13,6 +13,7 @@
 #include <stdlib.h>		// exit 
 #include <errno.h>
 #include <linux/tipc.h>         // sockadd_tipc
+#include <time.h>
 
 #include "netlib.h" 		// netperf_request_struct
 #include "netsh.h"  	 	// debug
@@ -23,6 +24,7 @@ static  int confidence_iteration;
 static  char  local_cpu_method;
 static  char  remote_cpu_method;
 
+/* TO-DO: Add more output to the printed header */
 void
 print_top_tipc_test_header(char test_name[]) 
 {
@@ -159,11 +161,11 @@ Size (bytes)\n\
      during a test... ;-) at some point, this should probably become a
      64bit integral type, but those are not entirely common
      yet... time passes, and 64 bit types do indeed become common. */
-#if defined(WIN32) && _MSC_VER <= 1200
-  __int64 local_bytes_sent = 0
-#else
+//#if defined(WIN32) && _MSC_VER <= 1200
+//  __int64 local_bytes_sent = 0
+//#else
     unsigned long long local_bytes_sent = 0;
-#endif
+//#endif
 
   double        bytes_sent = 0.0;
 
@@ -300,7 +302,8 @@ Size (bytes)\n\
       if (!netperf_response.content.serv_errno) {
         if (debug)
           fprintf(where,"remote listen done.\n");
-        remote_port_id = tipc_stream_response->id;
+	// Get the id of the netserver tipc socket
+        remote_port_id = tipc_stream_response->id; 
         rsr_size              = tipc_stream_response->recv_buf_size;
         rss_size              = tipc_stream_response->send_buf_size;
         rem_nodelay     =       tipc_stream_response->no_delay;
@@ -347,7 +350,8 @@ Size (bytes)\n\
       fprintf(where,"send_tipc_stream: send_socket obtained...\n");
     }
 
-    // set buffer sizes and other cool stuff
+    // set buffer sizes 
+    // from create_socket() in tcp_stream test case
     set_sock_buffer (send_socket, SEND_BUFFER, lss_size_req, &lss_size);
     set_sock_buffer (send_socket, RECV_BUFFER, lsr_size_req, &lsr_size);
 
@@ -500,7 +504,6 @@ Size (bytes)\n\
 	  /* the test was interrupted, must be the end of test */
 	  break;
 	}
-	printf("sent bytes: %llu\n", local_bytes_sent);
 	perror("netperf: data send error");
 	printf("len was %d\n",len);
 	exit(1);
@@ -535,7 +538,6 @@ Size (bytes)\n\
       }
 
     }
-	
     
     /* The test is over. Flush the buffers to the remote end. We do a */
     /* graceful release to insure that all data has been taken by the */
@@ -548,17 +550,15 @@ Size (bytes)\n\
       //get_tcp_info(send_socket,&tipc_mss);
     }
 
-    if (shutdown(send_socket,SHUT_WR) == SOCKET_ERROR && !times_up) {
+    if (shutdown(send_socket,SHUT_RDWR) == SOCKET_ERROR && !times_up) {
       perror("netperf: cannot shutdown tipc stream socket");
       exit(1);
     }
 
-    /* hang a recv() off the socket to block until the remote has */
-    /* brought all the data up into the application. it will do a */
-    /* shutdown to cause a FIN to be sent our way. We will assume that */
-    /* any exit from the recv() call is good... raj 4/93 */
- 
-    recv(send_socket, send_ring->buffer_ptr, send_size, 0);
+
+    /* TIPC does not acknowledge connection shutdowns the same way TCP does,
+       so we cannot do the SHUT_WR+recv() hack here*/
+
 
     /* this call will always give us the elapsed time for the test, and */
     /* will also store-away the necessaries for cpu utilization */
@@ -987,6 +987,7 @@ recv_tipc_stream()
   }
 
   // set buffer sizes and other cool stuff
+  // from create_socket() in tcp_stream test case
   set_sock_buffer (s_listen, SEND_BUFFER, lss_size_req, &lss_size);
   set_sock_buffer (s_listen, RECV_BUFFER, lsr_size_req, &lsr_size);
 
@@ -1141,7 +1142,7 @@ recv_tipc_stream()
   bytes_received = 0;
   receive_calls  = 0;
 
-  while (!times_up && (len = recv(s_data, recv_ring->buffer_ptr, recv_size, 0) )) {
+  while (!times_up && ((len = recv(s_data, recv_ring->buffer_ptr, recv_size, 0)) != 0)) {
     if (len == SOCKET_ERROR) {
       if (times_up)
 	break;
@@ -1172,11 +1173,11 @@ recv_tipc_stream()
     select(s_data+1,&readfds,NULL,NULL,&timeout);
 #endif /* DO_SELECT */
   }
-  
+
   /* perform a shutdown to signal the sender that */
   /* we have received all the data sent. raj 4/93 */
 
-  if (shutdown(s_data,SHUT_WR) == SOCKET_ERROR && !times_up) {
+  if (shutdown(s_data,SHUT_RDWR) == SOCKET_ERROR && !times_up) {
     netperf_response.content.serv_errno = errno;
     send_response();
     exit(1);
