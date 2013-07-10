@@ -233,56 +233,6 @@ Size (bytes)\n\
     bytes_sent     =    0.0;
     times_up       =    0;
 
-    /*set up the data socket                        */
-    //    send_socket = create_data_socket(local_res);
-
-
-
-    /* Call to set_sock_buffer to set buffer size!!! */
-
-
-
-
-
-    /* at this point, we have either retrieved the socket buffer sizes, */
-    /* or have tried to set them, so now, we may want to set the send */
-    /* size based on that (because the user either did not use a -m */
-    /* option, or used one with an argument of 0). If the socket buffer */
-    /* size is not available, we will set the send size to 4KB - no */
-    /* particular reason, just arbitrary... */
-    if (send_size == 0) {
-      if (lss_size > 0) {
-        send_size = lss_size;
-      }
-      else {
-        send_size = 4096;
-      }
-    }
-
-    /* set-up the data buffer ring with the requested alignment and offset. */
-    /* note also that we have allocated a quantity */
-    /* of memory that is at least one send-size greater than our socket */
-    /* buffer size. We want to be sure that there are at least two */
-    /* buffers allocated - this can be a bit of a problem when the */
-    /* send_size is bigger than the socket size, so we must check... the */
-    /* user may have wanted to explicitly set the "width" of our send */
-    /* buffers, we should respect that wish... */
-    if (send_width == 0) {
-      send_width = (lss_size/send_size) + 1;
-      if (send_width == 1) send_width++;
-    }
-    if (send_ring == NULL) {
-      /* only allocate the send ring once. this is a networking test, */
-      /* not a memory allocation test. this way, we do not need a */
-      /* deallocate_buffer_ring() routine, and I don't feel like */
-      /* writing one anyway :) raj 11/94 */
-      send_ring = allocate_buffer_ring(send_width,
-                                       send_size,
-                                       local_send_align,
-                                       local_send_offset);
-    }
-
-    /* If the user has requested cpu utilization measurements, we must */
     /* calibrate the cpu(s). We will perform this task within the tests */
     /* themselves. If the user has specified the cpu rate, then */
     /* calibrate_local_cpu will return rather quickly as it will have */
@@ -378,9 +328,6 @@ Size (bytes)\n\
       }
     }
 
-#ifdef WANT_DEMO
-    demo_stream_setup(lss_size,rsr_size);
-#endif
 
     /* Use received port id to connect to the remote tipc port */
     memset(&remote_addr, 0, sizeof(remote_addr));
@@ -389,7 +336,7 @@ Size (bytes)\n\
     remote_addr.addr.id = remote_port_id;
     remote_addr.scope = TIPC_ZONE_SCOPE;
 
-    send_socket = socket (AF_TIPC, SOCK_SEQPACKET, 0);
+    send_socket = socket (AF_TIPC, SOCK_STREAM, 0);
 
     if (send_socket == INVALID_SOCKET){
       perror("netperf: send_tipc_stream: tipc stream data socket");
@@ -399,6 +346,62 @@ Size (bytes)\n\
     if (debug) {
       fprintf(where,"send_tipc_stream: send_socket obtained...\n");
     }
+
+    // set buffer sizes and other cool stuff
+    set_sock_buffer (send_socket, SEND_BUFFER, lss_size_req, &lss_size);
+    set_sock_buffer (send_socket, RECV_BUFFER, lsr_size_req, &lsr_size);
+
+
+
+/* begin: moved down */
+
+    /* at this point, we have either retrieved the socket buffer sizes, */
+    /* or have tried to set them, so now, we may want to set the send */
+    /* size based on that (because the user either did not use a -m */
+    /* option, or used one with an argument of 0). If the socket buffer */
+    /* size is not available, we will set the send size to 4KB - no */
+    /* particular reason, just arbitrary... */
+    if (send_size == 0) {
+      if (lss_size > 0) {
+        send_size = lss_size;
+      }
+      else {
+        send_size = 4096;
+      }
+    }
+
+    /* set-up the data buffer ring with the requested alignment and offset. */
+    /* note also that we have allocated a quantity */
+    /* of memory that is at least one send-size greater than our socket */
+    /* buffer size. We want to be sure that there are at least two */
+    /* buffers allocated - this can be a bit of a problem when the */
+    /* send_size is bigger than the socket size, so we must check... the */
+    /* user may have wanted to explicitly set the "width" of our send */
+    /* buffers, we should respect that wish... */
+    if (send_width == 0) {
+      send_width = (lss_size/send_size) + 1;
+      if (send_width == 1) send_width++;
+    }
+
+    if (send_ring == NULL) {
+      /* only allocate the send ring once. this is a networking test, */
+      /* not a memory allocation test. this way, we do not need a */
+      /* deallocate_buffer_ring() routine, and I don't feel like */
+      /* writing one anyway :) raj 11/94 */
+      send_ring = allocate_buffer_ring(send_width,
+                                       send_size,
+                                       local_send_align,
+                                       local_send_offset);
+    }
+
+#ifdef WANT_DEMO
+    demo_stream_setup(lss_size,rsr_size);
+#endif
+
+/* end: moved down */
+
+
+
 
     if (connect(send_socket, (struct sockaddr *)&remote_addr, sizeof(remote_addr)) != 0) {
       perror("tipc: failed to connect to tipc netserver");
@@ -489,7 +492,6 @@ Size (bytes)\n\
 	HIST_timestamp(&time_one);
       }
 #endif /* WANT_HISTOGRAM */
-
       if((len=send(send_socket,
 		   send_ring->buffer_ptr,
 		   send_size,
@@ -952,7 +954,7 @@ recv_tipc_stream()
   myaddr_in.addr.name.name.instance = 0;
   myaddr_in.scope = TIPC_ZONE_SCOPE;  
 
-  s_listen = socket(AF_TIPC, SOCK_SEQPACKET, 0);
+  s_listen = socket(AF_TIPC, SOCK_STREAM, 0);
 
   if (bind(s_listen, 
 	   (struct sockaddr *)&myaddr_in, 
