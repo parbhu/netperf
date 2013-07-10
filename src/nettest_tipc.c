@@ -99,6 +99,67 @@ print_top_tipc_test_header(char test_name[])
   free(address_buf);
 }
 
+
+SOCKET
+create_tipc_send_socket(struct sockaddr_tipc *addr, struct tipc_portid remote_port_id)
+{
+
+  SOCKET send_socket;
+
+  memset(addr, 0, sizeof(*addr));
+  addr->family = AF_TIPC;
+  addr->addrtype = TIPC_ADDR_ID;
+  addr->addr.id = remote_port_id;
+  addr->scope = TIPC_ZONE_SCOPE;
+
+  /*set up the data socket                        */
+  send_socket = socket(AF_TIPC, SOCK_STREAM, 0);
+
+  if (send_socket == INVALID_SOCKET){
+    fprintf(where,
+            "netperf: create_tipc_send_socket: socket: errno %d errmsg %s\n",
+	    errno,
+            strerror(errno));
+    fflush(where);
+    exit(1);
+  }
+
+  if (debug) {
+    fprintf(where,"create_tipc_send_socket: socket %d obtained...\n",send_socket);
+    fflush(where);
+  }
+
+  /* Modify the local socket size. The reason we alter the send buffer
+   size here rather than when the connection is made is to take care
+   of decreases in buffer size. Decreasing the window size after
+   connection establishment is a TCP no-no. Also, by setting the
+   buffer (window) size before the connection is established, we can
+   control the TCP MSS (segment size). The MSS is never (well, should
+   never be) more that 1/2 the minimum receive buffer size at each
+   half of the connection.  This is why we are altering the receive
+   buffer size on the sending size of a unidirectional transfer. If
+   the user has not requested that the socket buffers be altered, we
+   will try to find-out what their values are. If we cannot touch the
+   socket buffer in any way, we will set the values to -1 to indicate
+   that.  */
+
+  /* all the oogy nitty gritty stuff moved from here into the routine
+     being called below, per patches from davidm to workaround the bug
+     in Linux getsockopt().  raj 2004-06-15 */
+  set_sock_buffer (send_socket, SEND_BUFFER, lss_size_req, &lss_size);
+  set_sock_buffer (send_socket, RECV_BUFFER, lsr_size_req, &lsr_size);
+
+  return send_socket;
+
+}
+
+
+
+
+
+
+
+
 void 
 send_tipc_stream(char remote_host[]) 
 {
@@ -328,31 +389,7 @@ Size (bytes)\n\
       }
     }
 
-
-    /* Use received port id to connect to the remote tipc port */
-    memset(&remote_addr, 0, sizeof(remote_addr));
-    remote_addr.family = AF_TIPC;
-    remote_addr.addrtype = TIPC_ADDR_ID;
-    remote_addr.addr.id = remote_port_id;
-    remote_addr.scope = TIPC_ZONE_SCOPE;
-
-    send_socket = socket (AF_TIPC, SOCK_STREAM, 0);
-
-    if (send_socket == INVALID_SOCKET){
-      perror("netperf: send_tipc_stream: tipc stream data socket");
-      exit(1);
-    }
-
-    if (debug) {
-      fprintf(where,"send_tipc_stream: send_socket obtained...\n");
-    }
-
-    // set buffer sizes 
-    // from create_socket() in tcp_stream test case
-    set_sock_buffer (send_socket, SEND_BUFFER, lss_size_req, &lss_size);
-    set_sock_buffer (send_socket, RECV_BUFFER, lsr_size_req, &lsr_size);
-
-
+    send_socket = create_tipc_send_socket(&remote_addr, remote_port_id);
 
 /* begin: moved down */
 
@@ -940,6 +977,12 @@ recv_tipc_stream()
 
   s_listen = socket(AF_TIPC, SOCK_STREAM, 0);
 
+  if (s_listen == INVALID_SOCKET) {
+    netperf_response.content.serv_errno = errno;
+    send_response();
+    exit(1);
+  }
+
   if (bind(s_listen, 
 	   (struct sockaddr *)&myaddr_in, 
 	   sizeof(myaddr_in)) < 0) {
@@ -961,13 +1004,8 @@ recv_tipc_stream()
   tipc_stream_response->id = myaddr_in.addr.id;
 
 
-  if (s_listen == INVALID_SOCKET) {
-    netperf_response.content.serv_errno = errno;
-    send_response();
-    exit(1);
-  }
 
-  // set buffer sizes and other cool stuff
+  // set buffer sizes
   // from create_socket() in tcp_stream test case
   set_sock_buffer (s_listen, SEND_BUFFER, lss_size_req, &lss_size);
   set_sock_buffer (s_listen, RECV_BUFFER, lsr_size_req, &lsr_size);
