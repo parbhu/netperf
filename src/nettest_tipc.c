@@ -916,7 +916,10 @@ recv_tipc_stream()
     fflush(where);
   }
 
-  /* set the globals based on the values in the request. */
+  /* create_data_socket expects to find some things in the global */
+  /* variables, so set the globals based on the values in the request. */
+  /* once the socket has been created, we will set the response values */
+  /* based on the updated value of those globals. raj 7/94 */
   lss_size_req = tipc_stream_request->send_buf_size;
   lsr_size_req = tipc_stream_request->recv_buf_size;
   loc_nodelay  = tipc_stream_request->no_delay;
@@ -982,6 +985,11 @@ recv_tipc_stream()
     send_response();
     exit(1);
   }
+
+  // set buffer sizes and other cool stuff
+  set_sock_buffer (s_listen, SEND_BUFFER, lss_size_req, &lss_size);
+  set_sock_buffer (s_listen, RECV_BUFFER, lsr_size_req, &lsr_size);
+
 
 #ifdef WIN32
   /* The test timer can fire during operations on the listening socket,
