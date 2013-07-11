@@ -1,5 +1,7 @@
 /**************************/
-/*   tipc test cases      */
+/*   nettest_tipc.c       */
+/*                        */
+/*   scan_tipc_args()     */
 /*                        */
 /*   send_tipc_stream()   */
 /*   recv_tipc_stream()   */
@@ -13,90 +15,83 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <linux/tipc.h> 
-#include <time.h>
+//#include <time.h>
+#include <unistd.h>
 
 #include "netlib.h"
 #include "netsh.h" 
 #include "nettest_tipc.h"
-#include "nettest_bsd.h"
+//#include "nettest_bsd.h"
+
+/* Following extern was defined in nettest_bsd.c */
+extern int first_burst_size; 
+
+extern int rss_size_req;    /* requested remote socket send buffer size */
+extern int rsr_size_req;    /* requested remote socket recv buffer size */
+extern int rss_size;             /* initial remote socket send buffer size */
+extern int rsr_size;             /* initial remote socket recv buffer size */
+extern int lss_size_req;    /* requested local socket send buffer size */
+extern int lsr_size_req;    /* requested local socket recv buffer size */
+extern int lss_size;             /* local  socket send buffer size       */
+extern int lsr_size;             /* local  socket recv buffer size       */
+extern int rsp_size;         /* response size                        */
+
+extern int send_size;            /* how big are individual sends         */
+extern int recv_size;            /* how big are individual receives      */
+
+/* extern defined in nettest_omni.c */
+extern int	legacy;
+extern char	*output_selection_spec;
+extern int	implicit_direction;
+
+/* from nettest_bsd.h */
+uint32_t direction;     /* which way flows the data? */
+
+/* from nettest_dlpi.c */
+static int req_size = 100;       /* request size                         */
+
+/* from nettest_omni.c */
+char test_uuid[38];
+
 
 static  int confidence_iteration;
 static  char  local_cpu_method;
 static  char  remote_cpu_method;
 
+char tipc_usage[] = "\n\
+Usage: netperf [global options] -- [test options] \n\
+\n\
+TIPC Sockets Test Options:\n\
+    -b number         Send number requests at start of _RR tests\n\
+    -h                Display this text\n\
+    -m bytes          Set the send size (TCP_STREAM, UDP_STREAM)\n\
+    -M bytes          Set the recv size (TCP_STREAM, UDP_STREAM)\n\
+    -r req,[rsp]      Set request/response sizes (TCP_RR, UDP_RR)\n\
+    -s send[,recv]    Set local socket send/recv buffer sizes\n\
+    -S send[,recv]    Set remote socket send/recv buffer sizes\n\
+    -o\n\
+    -O\n\
+    -u\n\
+\n\
+For those options taking two parms, at least one must be specified;\n\
+specifying one value without a comma will set both parms to that\n\
+value, specifying a value with a leading comma will set just the second\n\
+parm, a value with a trailing comma will set just the first. To set\n\
+each parm to unique values, specify both and separate them with a\n\
+comma.\n";
+
+
+
+
 /* TO-DO: Add more output to the printed header */
 void
 print_top_tipc_test_header(char test_name[]) 
 {
-  char *address_buf;
-
-  address_buf = malloc(16); /* magic constant */
-
-  if (address_buf == NULL) {
-    fprintf(where,"Unable to allocate address_buf\n");
-    fflush(where);
-    exit(1);
-  }
-
   /* we want to have some additional, interesting information in the
      headers. we know some of it here, but not all, so we will only
      print the test title here and will print the results titles after
      the test is finished */
   fprintf(where,"%s",test_name);
-
-  if (iteration_max > 1) {
-    fprintf(where,
-            " : +/-%.3f%% @ %2d%% conf. %s",
-            interval/0.02,
-            confidence_level,
-            result_confidence_only ? " on result only" : "");
-  }
-    if ((loc_nodelay > 0) || (rem_nodelay > 0)) {
-    fprintf(where," : nodelay");
-  }
-  if ((loc_sndavoid > 0) ||
-      (loc_rcvavoid > 0) ||
-      (rem_sndavoid > 0) ||
-      (rem_rcvavoid > 0)) {
-    fprintf(where," : copy avoidance");
-  }
-
-  if (no_control) {
-    fprintf(where," : no control");
-  }
-
-#ifdef WANT_HISTOGRAM
-  fprintf(where," : histogram");
-#endif /* WANT_HISTOGRAM */
-
-#ifdef WANT_INTERVALS
-#ifndef WANT_SPIN
-  fprintf(where," : interval");
-#else
-  fprintf(where," : spin interval");
-#endif
-#endif /* WANT_INTERVALS */
-
-#ifdef DIRTY
-  fprintf(where," : dirty data");
-#endif /* DIRTY */
-#ifdef WANT_DEMO
-  fprintf(where," : demo");
-#endif
-//#ifdef WANT_FIRST_BURST
-  /* a little hokey perhaps, but we really only want this to be
-     emitted for tests where it actually is used, which means a
-     "REQUEST/RESPONSE" test. raj 2005-11-10 */
-//  if (strstr(test_name,"REQUEST/RESPONSE")) {
-//    fprintf(where," : first burst %d",first_burst_size);
-//  }
-//#endif
-  if (cpu_binding_requested) {
-    fprintf(where," : cpu bind");
-  }
-  fprintf(where,"\n");
-
-  free(address_buf);
 }
 
 
@@ -153,7 +148,7 @@ create_tipc_socket()
 	SCTP_NODELAY, TCP_CORK, SO_KEEPALIVE, SO_REUSEADDR and
 	TCP_CORK on the created socket. This cannot be done 
 	for tipc. */
-  loc_nodelay = 0;
+  //loc_nodelay = 0;
 	
 #if defined(SO_PRIORITY)
   if (local_socket_prio >= 0) {
@@ -336,7 +331,7 @@ Send   Recv    Send   Recv             Send (avg)          Recv (avg)\n\
       tipc_stream_request->send_buf_size =       rss_size_req;
       tipc_stream_request->recv_buf_size =       rsr_size_req;
       tipc_stream_request->receive_size  =       recv_size;
-      tipc_stream_request->no_delay      =       rem_nodelay;
+      //tipc_stream_request->no_delay      =       rem_nodelay;
       tipc_stream_request->recv_alignment        =       remote_recv_align;
       tipc_stream_request->recv_offset   =       remote_recv_offset;
       tipc_stream_request->measure_cpu   =       remote_cpu_usage;
@@ -347,8 +342,8 @@ Send   Recv    Send   Recv             Send (avg)          Recv (avg)\n\
       else {
         tipc_stream_request->test_length =       test_bytes;
       }
-      tipc_stream_request->so_rcvavoid   =       rem_rcvavoid;
-      tipc_stream_request->so_sndavoid   =       rem_sndavoid;
+      //tipc_stream_request->so_rcvavoid   =       rem_rcvavoid;
+      //tipc_stream_request->so_sndavoid   =       rem_sndavoid;
 #ifdef DIRTY
       tipc_stream_request->dirty_count     =       rem_dirty_count;
       tipc_stream_request->clean_count     =       rem_clean_count;
@@ -383,7 +378,7 @@ Send   Recv    Send   Recv             Send (avg)          Recv (avg)\n\
         remote_port_id  = tipc_stream_response->id; 
         rsr_size        = tipc_stream_response->recv_buf_size;
         rss_size        = tipc_stream_response->send_buf_size;
-        rem_nodelay     = tipc_stream_response->no_delay;
+        //rem_nodelay     = tipc_stream_response->no_delay;
         remote_cpu_usage= tipc_stream_response->measure_cpu;
         remote_cpu_rate = tipc_stream_response->cpu_rate;
 
@@ -392,8 +387,8 @@ Send   Recv    Send   Recv             Send (avg)          Recv (avg)\n\
         //set_port_number(remote_res,
         //                (short)tcp_stream_response->data_port_number);
 
-        rem_rcvavoid    = tipc_stream_response->so_rcvavoid;
-        rem_sndavoid    = tipc_stream_response->so_sndavoid;
+        //rem_rcvavoid    = tipc_stream_response->so_rcvavoid;
+        //rem_sndavoid    = tipc_stream_response->so_sndavoid;
 
       }
       else {
@@ -940,9 +935,9 @@ recv_tipc_stream()
   /* based on the updated value of those globals. */
   lss_size_req = tipc_stream_request->send_buf_size;
   lsr_size_req = tipc_stream_request->recv_buf_size;
-  loc_nodelay  = tipc_stream_request->no_delay;
-  loc_rcvavoid = tipc_stream_request->so_rcvavoid;
-  loc_sndavoid = tipc_stream_request->so_sndavoid;
+  //loc_nodelay  = tipc_stream_request->no_delay;
+  //loc_rcvavoid = tipc_stream_request->so_rcvavoid;
+  //loc_sndavoid = tipc_stream_request->so_sndavoid;
 
   //  set_hostname_and_port(local_name,
   //                        port_buffer,
@@ -1060,9 +1055,9 @@ recv_tipc_stream()
   /* the socket parms from the globals */
   tipc_stream_response->send_buf_size = lss_size;
   tipc_stream_response->recv_buf_size = lsr_size;
-  tipc_stream_response->no_delay = loc_nodelay;
-  tipc_stream_response->so_rcvavoid = loc_rcvavoid;
-  tipc_stream_response->so_sndavoid = loc_sndavoid;
+  //tipc_stream_response->no_delay = loc_nodelay;
+  //tipc_stream_response->so_rcvavoid = loc_rcvavoid;
+  //tipc_stream_response->so_sndavoid = loc_sndavoid;
   tipc_stream_response->receive_size = recv_size;
 
   /* Netperf will need the port id of s_listen to be able to connect */
@@ -1224,5 +1219,155 @@ recv_tipc_rr()
   printf("netserver: TIPC rr test.\n");
 }
 
+
+
+
+void
+print_tipc_usage()
+{
+
+  fwrite(tipc_usage, sizeof(char), strlen(tipc_usage), stdout);
+  exit(1);
+
+}
+
+
+
+
+void
+scan_tipc_args(int argc, char *argv[])
+{
+
+#define TIPC_ARGS "h:b:m:M:oO:r:s:S:u"
+
+  extern char   *optarg;          /* pointer to option string   */
+
+  int           c;
+  int           have_uuid = 0;
+
+  char arg1[BUFSIZ];  /* argument holders          */
+  char arg2[BUFSIZ];
+
+  if (debug) {
+    int i;
+    printf("%s called with the following argument vector\n",
+           __FUNCTION__);
+    for (i = 0; i< argc; i++) {
+      printf("%s ",argv[i]);
+    }
+    printf("\n");
+  }
+  /* Go through all the command line arguments and break them */
+  /* out. For those options that take two parms, specifying only */
+  /* the first will set both to that value. Specifying only the */
+  /* second will leave the first untouched. To change only the */
+  /* first, use the form "first," (see the routine break_args.. */
+
+  while ((c= getopt(argc, argv, TIPC_ARGS)) != EOF) {
+    switch (c) {
+    case '?':
+    case 'h':
+      print_tipc_usage();
+      exit(1);
+    case 'b':
+#ifdef WANT_FIRST_BURST
+      first_burst_size = atoi(optarg);
+#else /* WANT_FIRST_BURST */
+      printf("Initial request burst functionality not compiled-in!\n");
+#endif /* WANT_FIRST_BURST */
+      break;
+    case 'm':
+      /* set the send size */
+      send_size = convert(optarg);
+      break;
+    case 'M':
+      /* set the recv size */
+      recv_size = convert(optarg);
+      break;
+    case 'o':
+      netperf_output_mode = CSV;
+      legacy = 0;
+      /* obliterate any previous file name */
+      if (output_selection_spec) {
+        free(output_selection_spec);
+        output_selection_spec = NULL;
+      }
+      if (output_selection_spec) {
+        free(output_selection_spec);
+        output_selection_spec = NULL;
+      }
+      if (argv[optind] && ((unsigned char)argv[optind][0] != '-')) {
+        /* we assume that what follows is the name of a file with the
+           list of desired output values. */
+        output_selection_spec = strdup(argv[optind]);
+        optind++;
+        /* special case - if the file name is "?" then we will emit a
+           list of the available outputs */
+        if (strcmp(output_selection_spec,"?") == 0) {
+          dump_netperf_output_choices(stdout,1);
+          exit(1);
+        }
+      }
+      break;
+    case 'O':
+      netperf_output_mode = HUMAN;
+      legacy = 0;
+      /* obliterate any previous file name */
+      if (output_selection_spec) {
+        free(output_selection_spec);
+        output_selection_spec = NULL;
+      }
+      if (argv[optind] && ((unsigned char)argv[optind][0] != '-')) {
+        /* we assume that what follows is the name of a file with the
+           list of desired output values */
+        output_selection_spec = strdup(argv[optind]);
+        optind++;
+        if (strcmp(output_selection_spec,"?") == 0) {
+          dump_netperf_output_choices(stdout,0);
+          exit(1);
+        }
+      }
+      break;
+    case 'r':
+      /* set the request/response sizes. setting request/response
+         sizes implicitly sets direction to XMIT and RECV */
+      if (implicit_direction) {
+        direction |= NETPERF_XMIT;
+        direction |= NETPERF_RECV;
+      }
+      break_args(optarg,arg1,arg2);
+      if (arg1[0])
+        req_size = convert(arg1);
+      if (arg2[0])
+        rsp_size = convert(arg2);
+      break;
+    case 's':
+      /* set local socket sizes */
+      break_args(optarg,arg1,arg2);
+      if (arg1[0])
+        lss_size_req = convert(arg1);
+      if (arg2[0])
+        lsr_size_req = convert(arg2);
+      break;
+    case 'S':
+      /* set remote socket sizes */
+      break_args(optarg,arg1,arg2);
+      if (arg1[0])
+        rss_size_req = convert(arg1);
+      if (arg2[0])
+        rsr_size_req = convert(arg2);
+      break;
+    case 'u':
+      /* use the supplied string as the UUID for this test. at some
+         point we may want to sanity check the string we are given but
+         for now we won't worry about it */
+      strncpy(test_uuid,optarg,sizeof(test_uuid));
+      /* strncpy may leave us with a string without a null at the end */
+      test_uuid[sizeof(test_uuid) - 1] = 0;
+      have_uuid = 1;
+      break;
+    }
+  }
+}
 
 
