@@ -150,10 +150,60 @@ create_tipc_send_socket(struct sockaddr_tipc *addr, struct tipc_portid remote_po
   set_sock_buffer (send_socket, RECV_BUFFER, lsr_size_req, &lsr_size);
 
   return send_socket;
-
 }
 
+SOCKET
+create_tipc_rcv_socket(struct sockaddr_tipc *addr)
+{
 
+  SOCKET rcv_socket;
+
+  memset(addr, 0, sizeof(*addr));
+  addr->family = AF_TIPC;
+  addr->addrtype = TIPC_ADDR_NAME;
+  addr->addr.name.name.type = NETSERVER_TIPC_DEFAULT;
+  addr->addr.name.name.instance = 0;
+  addr->scope = TIPC_ZONE_SCOPE;
+
+  /*set up the data socket                        */
+  rcv_socket = socket(AF_TIPC, SOCK_STREAM, 0);
+
+  if (rcv_socket == INVALID_SOCKET){
+    fprintf(where,
+            "netserver: create_tipc_rcv_socket: socket: errno %d errmsg %s\n",
+            errno,
+            strerror(errno));
+    fflush(where);
+    exit(1);
+  }
+
+  if (debug) {
+    fprintf(where,"create_tipc_rcv_socket: socket %d obtained...\n",rcv_socket);
+    fflush(where);
+  }
+
+  /* Modify the local socket size. The reason we alter the send buffer
+   size here rather than when the connection is made is to take care
+   of decreases in buffer size. Decreasing the window size after
+   connection establishment is a TCP no-no. Also, by setting the
+   buffer (window) size before the connection is established, we can
+   control the TCP MSS (segment size). The MSS is never (well, should
+   never be) more that 1/2 the minimum receive buffer size at each
+   half of the connection.  This is why we are altering the receive
+   buffer size on the sending size of a unidirectional transfer. If
+   the user has not requested that the socket buffers be altered, we
+   will try to find-out what their values are. If we cannot touch the
+   socket buffer in any way, we will set the values to -1 to indicate
+   that.  */
+
+  /* all the oogy nitty gritty stuff moved from here into the routine
+     being called below, per patches from davidm to workaround the bug
+     in Linux getsockopt().  raj 2004-06-15 */
+  set_sock_buffer (rcv_socket, SEND_BUFFER, lss_size_req, &lss_size);
+  set_sock_buffer (rcv_socket, RECV_BUFFER, lsr_size_req, &lsr_size);
+
+  return rcv_socket;
+}
 
 
 
@@ -959,29 +1009,7 @@ recv_tipc_stream()
   //
   //  s_listen = create_data_socket(local_res);
 
-
-
-
-  /* Call to set_sock_buffer to set buffer size!!! */
-
-
-
-
-  /* Set up the tipc socket, bind */
-  memset(&myaddr_in, 0, sizeof(myaddr_in));
-  myaddr_in.family = AF_TIPC;
-  myaddr_in.addrtype = TIPC_ADDR_NAME;
-  myaddr_in.addr.name.name.type = NETSERVER_TIPC_DEFAULT;
-  myaddr_in.addr.name.name.instance = 0;
-  myaddr_in.scope = TIPC_ZONE_SCOPE;  
-
-  s_listen = socket(AF_TIPC, SOCK_STREAM, 0);
-
-  if (s_listen == INVALID_SOCKET) {
-    netperf_response.content.serv_errno = errno;
-    send_response();
-    exit(1);
-  }
+  s_listen = create_tipc_rcv_socket(&myaddr_in);
 
   if (bind(s_listen, 
 	   (struct sockaddr *)&myaddr_in, 
@@ -989,27 +1017,6 @@ recv_tipc_stream()
     perror("Netserver: failed to bind tipc port name\n");
     exit(1);
   }
-
-  /* Get node name with getsockname */
-  addrlen = sizeof(struct sockaddr_tipc);
-  memset(&myaddr_in, 0, sizeof(myaddr_in));
-  if (getsockname(s_listen, 
-		  (struct sockaddr*)&myaddr_in, 
-		  &addrlen) != 0) {
-    perror("tipc: getsockname failed.");
-    exit(1);
-  }
-
-  /* Netperf needs port_id of the tipc socket */ 
-  tipc_stream_response->id = myaddr_in.addr.id;
-
-
-
-  // set buffer sizes
-  // from create_socket() in tcp_stream test case
-  set_sock_buffer (s_listen, SEND_BUFFER, lss_size_req, &lss_size);
-  set_sock_buffer (s_listen, RECV_BUFFER, lsr_size_req, &lsr_size);
-
 
   /* what sort of sizes did we end-up with? */
   if (tipc_stream_request->receive_size == 0) {
@@ -1100,6 +1107,19 @@ recv_tipc_stream()
   tipc_stream_response->so_rcvavoid = loc_rcvavoid;
   tipc_stream_response->so_sndavoid = loc_sndavoid;
   tipc_stream_response->receive_size = recv_size;
+
+  /* Netperf will need the port id of s_listen to be able to connect */
+  /* to netserver. This information is given by getsockname. */
+  addrlen = sizeof(struct sockaddr_tipc);
+  memset(&myaddr_in, 0, sizeof(myaddr_in));
+  if (getsockname(s_listen, 
+		  (struct sockaddr*)&myaddr_in, 
+		  &addrlen) != 0) {
+    perror("tipc: getsockname failed.");
+    exit(1);
+  }
+  tipc_stream_response->id = myaddr_in.addr.id;
+
 
   send_response();
 
