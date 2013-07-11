@@ -244,12 +244,6 @@ Local  Remote  Local  Remote  Xfered   Per                 Per\n\
 Send   Recv    Send   Recv             Send (avg)          Recv (avg)\n\
 %5d   %5d  %5d   %5d %6.4g  %6.2f    %6d   %6.2f %6d\n";
 
-  char *ksink_fmt2 = "\n\
-Maximum\n\
-Segment\n\
-Size (bytes)\n\
-%6d\n";
-
 
   float                 elapsed_time;
 
@@ -266,7 +260,6 @@ Size (bytes)\n\
   unsigned int nummessages = 0;
   SOCKET send_socket;
   int bytes_remaining;
-  int tipc_mss = -1;  /* possibly uninitialized on printf far below */
 
   /* with links like fddi, one can send > 32 bits worth of bytes
      during a test... ;-) at some point, this should probably become a
@@ -284,10 +277,8 @@ Size (bytes)\n\
 
   double        thruput;
 
-  //struct addrinfo *remote_res;
   struct sockaddr_tipc remote_addr;
   struct tipc_portid   remote_port_id;
-  //struct addrinfo *local_res;
 
   struct        tipc_stream_request_struct       *tipc_stream_request;
   struct        tipc_stream_response_struct      *tipc_stream_response;
@@ -305,6 +296,7 @@ Size (bytes)\n\
     time_hist = HIST_new();
   }
 #endif /* WANT_HISTOGRAM */
+
   /* since we are now disconnected from the code that established the */
   /* control socket, and since we want to be able to use different */
   /* protocols and such, we are passed the name of the remote host and */
@@ -402,7 +394,7 @@ Size (bytes)\n\
          cpu locally before sending the request, and will grab the
          counter value right after the connect returns. The remote
          will grab the counter right after the accept call. This saves
-         the hassle of extra messages being sent for the TCP
+	 the hassle of extra messages being sent for the TIPC
          tests.  */
 
       recv_response();
@@ -411,11 +403,11 @@ Size (bytes)\n\
         if (debug)
           fprintf(where,"remote listen done.\n");
 	// Get the id of the netserver tipc socket
-        remote_port_id = tipc_stream_response->id; 
-        rsr_size              = tipc_stream_response->recv_buf_size;
-        rss_size              = tipc_stream_response->send_buf_size;
-        rem_nodelay     =       tipc_stream_response->no_delay;
-        remote_cpu_usage=       tipc_stream_response->measure_cpu;
+        remote_port_id  = tipc_stream_response->id; 
+        rsr_size        = tipc_stream_response->recv_buf_size;
+        rss_size        = tipc_stream_response->send_buf_size;
+        rem_nodelay     = tipc_stream_response->no_delay;
+        remote_cpu_usage= tipc_stream_response->measure_cpu;
         remote_cpu_rate = tipc_stream_response->cpu_rate;
 
         /* we have to make sure that the server port number is in
@@ -440,8 +432,6 @@ Size (bytes)\n\
     }
 
     send_socket = create_tipc_send_socket(&remote_addr, remote_port_id);
-
-/* begin: moved down */
 
     /* at this point, we have either retrieved the socket buffer sizes, */
     /* or have tried to set them, so now, we may want to set the send */
@@ -486,10 +476,6 @@ Size (bytes)\n\
     demo_stream_setup(lss_size,rsr_size);
 #endif
 
-/* end: moved down */
-
-
-
 
     if (connect(send_socket, (struct sockaddr *)&remote_addr, sizeof(remote_addr)) != 0) {
       perror("tipc: failed to connect to tipc netserver");
@@ -510,7 +496,7 @@ Size (bytes)\n\
       /* The user wanted to end the test after a period of time. */
       times_up = 0;
       bytes_remaining = 0;
-      /* in previous revisions, we had the same code repeated throught */
+      /* in previous revisions, we had the same code repeated through */
       /* all the test suites. this was unnecessary, and meant more */
       /* work for me when I wanted to switch to POSIX signals, so I */
       /* have abstracted this out into a routine in netlib.c. if you */
@@ -537,14 +523,11 @@ Size (bytes)\n\
     INTERVALS_INIT();
 #endif /* WANT_INTERVALS */
 
-    /* before we start, initialize a few variables */
-
 #ifdef WANT_DEMO
     if (demo_mode) {
       demo_first_timestamp();
     }
 #endif
-
 
     /* We use an "OR" to control test execution. When the test is */
     /* controlled by time, the byte count check will always return false. */
@@ -616,23 +599,13 @@ Size (bytes)\n\
     /* The test is over. Flush the buffers to the remote end. We do a */
     /* graceful release to insure that all data has been taken by the */
     /* remote. */
-
-    /* but first, if the verbosity is greater than 1, find-out what */
-    /* the TCP maximum segment_size was (if possible) */
-    if (verbosity > 1) {
-      tipc_mss = -1;
-      //get_tcp_info(send_socket,&tipc_mss);
-    }
+    /* TIPC does not acknowledge connection shutdowns the same way TCP does,
+       so we cannot do the SHUT_WR+recv() hack here*/
 
     if (shutdown(send_socket,SHUT_RDWR) == SOCKET_ERROR && !times_up) {
       perror("netperf: cannot shutdown tipc stream socket");
       exit(1);
     }
-
-
-    /* TIPC does not acknowledge connection shutdowns the same way TCP does,
-       so we cannot do the SHUT_WR+recv() hack here*/
-
 
     /* this call will always give us the elapsed time for the test, and */
     /* will also store-away the necessaries for cpu utilization */
@@ -674,7 +647,7 @@ Size (bytes)\n\
       /* We now calculate what our thruput was for the test. In the
          future, we may want to include a calculation of the thruput
          measured by the remote, but it should be the case that for a
-         TCP stream test, that the two numbers should be *very*
+         TIPC stream test, that the two numbers should be *very*
          close... We calculate bytes_sent regardless of the way the
          test length was controlled.  If it was time, we needed to,
          and if it was by bytes, the user may have specified a number
@@ -864,7 +837,7 @@ Size (bytes)\n\
   if (verbosity > 1) {
     /* The user wanted to know it all, so we will give it to him. */
     /* This information will include as much as we can find about */
-    /* TCP statistics, the alignments of the sends and receives */
+    /* TIPC statistics, the alignments of the sends and receives */
     /* and all that sort of rot... */
 
     /* this stuff needs to be worked-out in the presence of confidence */
@@ -884,9 +857,6 @@ Size (bytes)\n\
             nummessages,
             bytes_sent / (double)tipc_stream_results->recv_calls,
             tipc_stream_results->recv_calls);
-    fprintf(where,
-            ksink_fmt2,
-            tipc_mss);
     fflush(where);
 #ifdef WANT_HISTOGRAM
     fprintf(where,"\n\nHistogram of time spent in send() call.\n");
@@ -912,11 +882,8 @@ recv_tipc_stream()
   unsigned int  receive_calls;
   float elapsed_time;
   double   bytes_received;
-
   struct ring_elt *recv_ring;
-
-  //struct addrinfo *local_res;
-  char local_name[BUFSIZ];
+  //char local_name[BUFSIZ];
   char port_buffer[PORTBUFSIZE];
 
 #ifdef DO_SELECT
@@ -984,10 +951,10 @@ recv_tipc_stream()
     fflush(where);
   }
 
-  /* create_data_socket expects to find some things in the global */
+  /* create_tipc_send_socket expects to find some things in the global */
   /* variables, so set the globals based on the values in the request. */
   /* once the socket has been created, we will set the response values */
-  /* based on the updated value of those globals. raj 7/94 */
+  /* based on the updated value of those globals. */
   lss_size_req = tipc_stream_request->send_buf_size;
   lsr_size_req = tipc_stream_request->recv_buf_size;
   loc_nodelay  = tipc_stream_request->no_delay;
