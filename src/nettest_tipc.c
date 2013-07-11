@@ -8,16 +8,16 @@
 /*                        */
 /**************************/
 
-#include <stdio.h>  		// printf
-#include <string.h>             // memset
-#include <stdlib.h>		// exit 
+#include <stdio.h> 
+#include <string.h> 
+#include <stdlib.h>
 #include <errno.h>
-#include <linux/tipc.h>         // sockadd_tipc
+#include <linux/tipc.h> 
 #include <time.h>
 
-#include "netlib.h" 		// netperf_request_struct
-#include "netsh.h"  	 	// debug
-#include "nettest_tipc.h"	// tipc_XXX_XXX_struct
+#include "netlib.h"
+#include "netsh.h" 
+#include "nettest_tipc.h"
 #include "nettest_bsd.h"
 
 static  int confidence_iteration;
@@ -100,24 +100,23 @@ print_top_tipc_test_header(char test_name[])
 }
 
 
+
+/* Function creating the tipc socket and set some options
+for it. Used in both send and receive side for tipc stream
+test case */
 SOCKET
-create_tipc_send_socket(struct sockaddr_tipc *addr, struct tipc_portid remote_port_id)
+create_tipc_socket()
 {
 
-  SOCKET send_socket;
-
-  memset(addr, 0, sizeof(*addr));
-  addr->family = AF_TIPC;
-  addr->addrtype = TIPC_ADDR_ID;
-  addr->addr.id = remote_port_id;
-  addr->scope = TIPC_ZONE_SCOPE;
+  SOCKET sock;
+  netperf_socklen_t sock_opt_len;
 
   /*set up the data socket                        */
-  send_socket = socket(AF_TIPC, SOCK_STREAM, 0);
+  sock = socket(AF_TIPC, SOCK_STREAM, 0);
 
-  if (send_socket == INVALID_SOCKET){
+  if (sock == INVALID_SOCKET){
     fprintf(where,
-            "netperf: create_tipc_send_socket: socket: errno %d errmsg %s\n",
+            "netperf: create_tipc_socket: socket: errno %d errmsg %s\n",
 	    errno,
             strerror(errno));
     fflush(where);
@@ -125,7 +124,7 @@ create_tipc_send_socket(struct sockaddr_tipc *addr, struct tipc_portid remote_po
   }
 
   if (debug) {
-    fprintf(where,"create_tipc_send_socket: socket %d obtained...\n",send_socket);
+    fprintf(where,"create_tipc_socket: socket %d obtained...\n",sock);
     fflush(where);
   }
 
@@ -146,67 +145,45 @@ create_tipc_send_socket(struct sockaddr_tipc *addr, struct tipc_portid remote_po
   /* all the oogy nitty gritty stuff moved from here into the routine
      being called below, per patches from davidm to workaround the bug
      in Linux getsockopt().  raj 2004-06-15 */
-  set_sock_buffer (send_socket, SEND_BUFFER, lss_size_req, &lss_size);
-  set_sock_buffer (send_socket, RECV_BUFFER, lsr_size_req, &lsr_size);
+  set_sock_buffer (sock, SEND_BUFFER, lss_size_req, &lss_size);
+  set_sock_buffer (sock, RECV_BUFFER, lsr_size_req, &lsr_size);
 
-  return send_socket;
-}
-
-SOCKET
-create_tipc_rcv_socket(struct sockaddr_tipc *addr)
-{
-
-  SOCKET rcv_socket;
-
-  memset(addr, 0, sizeof(*addr));
-  addr->family = AF_TIPC;
-  addr->addrtype = TIPC_ADDR_NAME;
-  addr->addr.name.name.type = NETSERVER_TIPC_DEFAULT;
-  addr->addr.name.name.instance = 0;
-  addr->scope = TIPC_ZONE_SCOPE;
-
-  /*set up the data socket                        */
-  rcv_socket = socket(AF_TIPC, SOCK_STREAM, 0);
-
-  if (rcv_socket == INVALID_SOCKET){
-    fprintf(where,
-            "netserver: create_tipc_rcv_socket: socket: errno %d errmsg %s\n",
-            errno,
-            strerror(errno));
-    fflush(where);
-    exit(1);
+	/* In the code for tcp stream test case there is code for 
+	setting SO_RCV_COPYAVPID, SO_SND_COPYAVOID, TCP_NODELAY,
+	SCTP_NODELAY, TCP_CORK, SO_KEEPALIVE, SO_REUSEADDR and
+	TCP_CORK on the created socket. This cannot be done 
+	for tipc. */
+  loc_nodelay = 0;
+	
+#if defined(SO_PRIORITY)
+  if (local_socket_prio >= 0) {
+    if (setsockopt(sock,
+                  SOL_SOCKET,
+                  SO_PRIORITY,
+                  &local_socket_prio,
+                  sizeof(int)) == SOCKET_ERROR) {
+      fprintf(where,
+             "netperf: create_data_socket: so_priority: errno %d\n",
+             errno);
+      fflush(where);
+      local_socket_prio = -2;
+    }
+    else {
+      sock_opt_len = 4;
+      getsockopt(sock,
+                 SOL_SOCKET,
+                 SO_PRIORITY,
+                 &local_socket_prio,
+                 &sock_opt_len);
+    }
   }
+#else
+  local_socket_prio = -3;
+#endif
 
-  if (debug) {
-    fprintf(where,"create_tipc_rcv_socket: socket %d obtained...\n",rcv_socket);
-    fflush(where);
-  }
+  return sock;
 
-  /* Modify the local socket size. The reason we alter the send buffer
-   size here rather than when the connection is made is to take care
-   of decreases in buffer size. Decreasing the window size after
-   connection establishment is a TCP no-no. Also, by setting the
-   buffer (window) size before the connection is established, we can
-   control the TCP MSS (segment size). The MSS is never (well, should
-   never be) more that 1/2 the minimum receive buffer size at each
-   half of the connection.  This is why we are altering the receive
-   buffer size on the sending size of a unidirectional transfer. If
-   the user has not requested that the socket buffers be altered, we
-   will try to find-out what their values are. If we cannot touch the
-   socket buffer in any way, we will set the values to -1 to indicate
-   that.  */
-
-  /* all the oogy nitty gritty stuff moved from here into the routine
-     being called below, per patches from davidm to workaround the bug
-     in Linux getsockopt().  raj 2004-06-15 */
-  set_sock_buffer (rcv_socket, SEND_BUFFER, lss_size_req, &lss_size);
-  set_sock_buffer (rcv_socket, RECV_BUFFER, lsr_size_req, &lsr_size);
-
-  return rcv_socket;
 }
-
-
-
 
 
 
@@ -431,7 +408,13 @@ Send   Recv    Send   Recv             Send (avg)          Recv (avg)\n\
       }
     }
 
-    send_socket = create_tipc_send_socket(&remote_addr, remote_port_id);
+    memset(&remote_addr, 0, sizeof(remote_addr));
+    remote_addr.family = AF_TIPC;
+    remote_addr.addrtype = TIPC_ADDR_ID;
+    remote_addr.addr.id = remote_port_id;
+    remote_addr.scope = TIPC_ZONE_SCOPE;
+
+    send_socket = create_tipc_socket();
 
     /* at this point, we have either retrieved the socket buffer sizes, */
     /* or have tried to set them, so now, we may want to set the send */
@@ -976,7 +959,14 @@ recv_tipc_stream()
   //
   //  s_listen = create_data_socket(local_res);
 
-  s_listen = create_tipc_rcv_socket(&myaddr_in);
+  memset(&myaddr_in, 0, sizeof(myaddr_in));
+  myaddr_in.family = AF_TIPC;
+  myaddr_in.addrtype = TIPC_ADDR_NAME;
+  myaddr_in.addr.name.name.type = NETSERVER_TIPC_DEFAULT;
+  myaddr_in.addr.name.name.instance = 0;
+  myaddr_in.scope = TIPC_ZONE_SCOPE;
+
+  s_listen = create_tipc_socket();
 
   if (bind(s_listen, 
 	   (struct sockaddr *)&myaddr_in, 
