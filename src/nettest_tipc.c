@@ -15,13 +15,11 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <linux/tipc.h> 
-//#include <time.h>
 #include <unistd.h>
 
 #include "netlib.h"
 #include "netsh.h" 
 #include "nettest_tipc.h"
-//#include "nettest_bsd.h"
 
 /* Following extern was defined in nettest_bsd.c */
 extern int first_burst_size; 
@@ -39,20 +37,12 @@ extern int rsp_size;         /* response size                        */
 extern int send_size;            /* how big are individual sends         */
 extern int recv_size;            /* how big are individual receives      */
 
-/* extern defined in nettest_omni.c */
-extern int	legacy;
-extern char	*output_selection_spec;
-extern int	implicit_direction;
-
-/* from nettest_bsd.h */
-uint32_t direction;     /* which way flows the data? */
-
-/* from nettest_dlpi.c */
-static int req_size = 100;       /* request size                         */
-
-/* from nettest_omni.c */
+uint32_t direction;     	/* which way flows the data? */
+static int req_size = 100;      /* request size                         */
 char test_uuid[38];
-
+int	legacy;
+char	*output_selection_spec;
+int	implicit_direction;
 
 static  int confidence_iteration;
 static  char  local_cpu_method;
@@ -62,16 +52,18 @@ char tipc_usage[] = "\n\
 Usage: netperf [global options] -- [test options] \n\
 \n\
 TIPC Sockets Test Options:\n\
-    -b number         Send number requests at start of _RR tests\n\
+    -b number         Send number requests at start of TIPC_RR tests\n\
     -h                Display this text\n\
-    -m bytes          Set the send size (TCP_STREAM, UDP_STREAM)\n\
-    -M bytes          Set the recv size (TCP_STREAM, UDP_STREAM)\n\
-    -r req,[rsp]      Set request/response sizes (TCP_RR, UDP_RR)\n\
+    -m bytes          Set the send size (TIPC_STREAM)\n\
+    -M bytes          Set the recv size (TIPC_STREAM)\n\
+    -r req,[rsp]      Set request/response sizes (TIPC_RR)\n\
     -s send[,recv]    Set local socket send/recv buffer sizes\n\
     -S send[,recv]    Set remote socket send/recv buffer sizes\n\
-    -o\n\
-    -O\n\
-    -u\n\
+    -o [file]         Generate CSV output optionally based on file\n\
+                      Use filename of '?' to get the list of choices\n\
+    -O [file]         Generate classic-style output based on file\n\
+                      Use filename of '?' to get the list of choices\n\
+    -u uuid           Use the supplied string as the UUID for this test.\n\
 \n\
 For those options taking two parms, at least one must be specified;\n\
 specifying one value without a comma will set both parms to that\n\
@@ -92,6 +84,7 @@ print_top_tipc_test_header(char test_name[])
      print the test title here and will print the results titles after
      the test is finished */
   fprintf(where,"%s",test_name);
+
 }
 
 
@@ -148,7 +141,6 @@ create_tipc_socket()
 	SCTP_NODELAY, TCP_CORK, SO_KEEPALIVE, SO_REUSEADDR and
 	TCP_CORK on the created socket. This cannot be done 
 	for tipc. */
-  //loc_nodelay = 0;
 	
 #if defined(SO_PRIORITY)
   if (local_socket_prio >= 0) {
@@ -331,7 +323,6 @@ Send   Recv    Send   Recv             Send (avg)          Recv (avg)\n\
       tipc_stream_request->send_buf_size =       rss_size_req;
       tipc_stream_request->recv_buf_size =       rsr_size_req;
       tipc_stream_request->receive_size  =       recv_size;
-      //tipc_stream_request->no_delay      =       rem_nodelay;
       tipc_stream_request->recv_alignment        =       remote_recv_align;
       tipc_stream_request->recv_offset   =       remote_recv_offset;
       tipc_stream_request->measure_cpu   =       remote_cpu_usage;
@@ -342,14 +333,11 @@ Send   Recv    Send   Recv             Send (avg)          Recv (avg)\n\
       else {
         tipc_stream_request->test_length =       test_bytes;
       }
-      //tipc_stream_request->so_rcvavoid   =       rem_rcvavoid;
-      //tipc_stream_request->so_sndavoid   =       rem_sndavoid;
 #ifdef DIRTY
       tipc_stream_request->dirty_count     =       rem_dirty_count;
       tipc_stream_request->clean_count     =       rem_clean_count;
 #endif /* DIRTY */
       tipc_stream_request->port            =    atoi(remote_data_port);
-      //tcp_stream_request->ipfamily = af_to_nf(remote_res->ai_family);
 
       if (debug > 1) {
         fprintf(where,
@@ -378,18 +366,8 @@ Send   Recv    Send   Recv             Send (avg)          Recv (avg)\n\
         remote_port_id  = tipc_stream_response->id; 
         rsr_size        = tipc_stream_response->recv_buf_size;
         rss_size        = tipc_stream_response->send_buf_size;
-        //rem_nodelay     = tipc_stream_response->no_delay;
         remote_cpu_usage= tipc_stream_response->measure_cpu;
         remote_cpu_rate = tipc_stream_response->cpu_rate;
-
-        /* we have to make sure that the server port number is in
-           network order */
-        //set_port_number(remote_res,
-        //                (short)tcp_stream_response->data_port_number);
-
-        //rem_rcvavoid    = tipc_stream_response->so_rcvavoid;
-        //rem_sndavoid    = tipc_stream_response->so_sndavoid;
-
       }
       else {
         Set_errno(netperf_response.content.serv_errno);
@@ -855,13 +833,10 @@ recv_tipc_stream()
   netperf_socklen_t addrlen;
   int   len;
 
-  FILE *fp; 						//printing debug info. Old
-
   unsigned int  receive_calls;
   float elapsed_time;
   double   bytes_received;
   struct ring_elt *recv_ring;
-  //char local_name[BUFSIZ];
   char port_buffer[PORTBUFSIZE];
 
 #ifdef DO_SELECT
@@ -872,10 +847,6 @@ recv_tipc_stream()
   struct        tipc_stream_request_struct       *tipc_stream_request;
   struct        tipc_stream_response_struct      *tipc_stream_response;
   struct        tipc_stream_results_struct       *tipc_stream_results;
-
-  /* Confirm that netperf_request is received - for debugging */
-  fp = fopen("netserver_output","a");
-  fprintf(fp, "netserver: TIPC stream test.\n");
 
 #ifdef DO_SELECT
   FD_ZERO(&readfds);
@@ -935,24 +906,6 @@ recv_tipc_stream()
   /* based on the updated value of those globals. */
   lss_size_req = tipc_stream_request->send_buf_size;
   lsr_size_req = tipc_stream_request->recv_buf_size;
-  //loc_nodelay  = tipc_stream_request->no_delay;
-  //loc_rcvavoid = tipc_stream_request->so_rcvavoid;
-  //loc_sndavoid = tipc_stream_request->so_sndavoid;
-
-  //  set_hostname_and_port(local_name,
-  //                        port_buffer,
-  //                        nf_to_af(tcp_stream_request->ipfamily),
-  //                        tcp_stream_request->port);
-
-  //  local_res = complete_addrinfo(local_name,
-  //                                local_name,
-  //                                port_buffer,
-  //                                nf_to_af(tcp_stream_request->ipfamily),
-  //                                SOCK_STREAM,
-  //                                IPPROTO_TCP,
-  //                                0);
-  //
-  //  s_listen = create_data_socket(local_res);
 
   memset(&myaddr_in, 0, sizeof(myaddr_in));
   myaddr_in.family = AF_TIPC;
@@ -1014,28 +967,7 @@ recv_tipc_stream()
     exit(1);
   }
 
-
-  /* now get the port number assigned by the system  */
-  //  addrlen = sizeof(myaddr_in);
-  //  if (getsockname(s_listen,
-  //                  (struct sockaddr *)&myaddr_in,
-  //                  &addrlen) == SOCKET_ERROR){
-  //    netperf_response.content.serv_errno = errno;
-  //    close(s_listen);
-  //    send_response();
-  //
-  //    exit(1);
-  //  }
-
-  /* Now myaddr_in contains the port and the internet address this is */
-  /* returned to the sender also implicitly telling the sender that the */
-  /* socket buffer sizing has been done. */
-
-  //  tcp_stream_response->data_port_number =
-  //    (int) ntohs(((struct sockaddr_in *)&myaddr_in)->sin_port);
-  //  netperf_response.content.serv_errno   = 0;
-
-  /* But wait, there's more. If the initiator wanted cpu measurements, */
+  /* If the initiator wanted cpu measurements, */
   /* then we must call the calibrate routine, which will return the max */
   /* rate back to the initiator. If the CPU was not to be measured, or */
   /* something went wrong with the calibration, we will return a -1 to */
@@ -1055,9 +987,6 @@ recv_tipc_stream()
   /* the socket parms from the globals */
   tipc_stream_response->send_buf_size = lss_size;
   tipc_stream_response->recv_buf_size = lsr_size;
-  //tipc_stream_response->no_delay = loc_nodelay;
-  //tipc_stream_response->so_rcvavoid = loc_rcvavoid;
-  //tipc_stream_response->so_sndavoid = loc_sndavoid;
   tipc_stream_response->receive_size = recv_size;
 
   /* Netperf will need the port id of s_listen to be able to connect */
@@ -1094,7 +1023,7 @@ recv_tipc_stream()
   /* attributes across an accept() call. Including this goes against */
   /* my better judgement :( raj 11/95 */
 
-  kludge_socket_options(s_data);
+  //kludge_socket_options(s_data);
 
 #endif /* KLUDGE_SOCKET_OPTIONS */
 
@@ -1156,6 +1085,7 @@ recv_tipc_stream()
     exit(1);
   }
 
+  stop_timer();
   cpu_stop(tipc_stream_request->measure_cpu,&elapsed_time);
 
   /* send the results to the sender                     */
