@@ -77,13 +77,12 @@ comma.\n";
 
 /* TO-DO: Add more output to the printed header */
 void
-print_top_tipc_test_header(char test_name[]) 
+print_top_tipc_test_header(char test_name[], struct tipc_portid remote_port) 
 {
-  /* we want to have some additional, interesting information in the
-     headers. we know some of it here, but not all, so we will only
-     print the test title here and will print the results titles after
-     the test is finished */
-  fprintf(where,"%s",test_name);
+  int n = remote_port.node;
+  unsigned int ref = remote_port.ref;
+
+  printf("%s to <%d.%d.%d:%u>\n", test_name, tipc_zone(n), tipc_cluster(n), tipc_node(n), ref);
 
 }
 
@@ -274,10 +273,6 @@ Send   Recv    Send   Recv             Send (avg)          Recv (avg)\n\
   //                     IPPROTO_TCP,
   //                     0);
 
-  if ( print_headers ) {
-    print_top_tipc_test_header("TIPC STREAM TEST");
-  }
-
   send_ring = NULL;
   confidence_iteration = 1;
   init_stat();
@@ -379,6 +374,10 @@ Send   Recv    Send   Recv             Send (avg)          Recv (avg)\n\
 
         exit(1);
       }
+    }
+
+    if ( print_headers ) {
+      print_top_tipc_test_header("TIPC STREAM TEST", remote_port_id);
     }
 
     memset(&remote_addr, 0, sizeof(remote_addr));
