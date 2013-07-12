@@ -74,8 +74,6 @@ comma.\n";
 
 
 
-
-/* TO-DO: Add more output to the printed header */
 void
 print_top_tipc_test_header(char test_name[], struct tipc_portid remote_port) 
 {
@@ -172,6 +170,10 @@ create_tipc_socket()
 }
 
 
+/* This routine implements the TIPC unidirectional data transfer test */
+/* (a.k.a. stream). It receives its */
+/* parameters via global variables from the shell and writes its */
+/* output to the standard output. */
 
 void 
 send_tipc_stream(char remote_host[]) 
@@ -259,19 +261,6 @@ Send   Recv    Send   Recv             Send (avg)          Recv (avg)\n\
     time_hist = HIST_new();
   }
 #endif /* WANT_HISTOGRAM */
-
-  /* since we are now disconnected from the code that established the */
-  /* control socket, and since we want to be able to use different */
-  /* protocols and such, we are passed the name of the remote host and */
-  /* must turn that into the test specific addressing information. */
-
-  /* complete_addrinfos will either succede or exit the process */
-  //  complete_addrinfos(&remote_res,
-  //                     &local_res,
-  //                     remote_host,
-  //                     SOCK_STREAM,
-  //                     IPPROTO_TCP,
-  //                     0);
 
   send_ring = NULL;
   confidence_iteration = 1;
@@ -427,11 +416,6 @@ Send   Recv    Send   Recv             Send (avg)          Recv (avg)\n\
                                        local_send_offset);
     }
 
-#ifdef WANT_DEMO
-    demo_stream_setup(lss_size,rsr_size);
-#endif
-
-
     if (connect(send_socket, (struct sockaddr *)&remote_addr, sizeof(remote_addr)) != 0) {
       perror("tipc: failed to connect to tipc netserver");
       exit(1);
@@ -478,12 +462,6 @@ Send   Recv    Send   Recv             Send (avg)          Recv (avg)\n\
     INTERVALS_INIT();
 #endif /* WANT_INTERVALS */
 
-#ifdef WANT_DEMO
-    if (demo_mode) {
-      demo_first_timestamp();
-    }
-#endif
-
     /* We use an "OR" to control test execution. When the test is */
     /* controlled by time, the byte count check will always return false. */
     /* When the test is controlled by byte count, the time test will */
@@ -529,10 +507,6 @@ Send   Recv    Send   Recv             Send (avg)          Recv (avg)\n\
 	HIST_add(time_hist,delta_micro(&time_one,&time_two));
       }
 #endif /* WANT_HISTOGRAM */
-
-#ifdef WANT_DEMO
-      demo_stream_interval(send_size);
-#endif
 
 #if defined(WANT_INTERVALS)
       INTERVALS_WAIT();
@@ -936,9 +910,7 @@ recv_tipc_stream()
   }
 
   /* we want to set-up our recv_ring in a manner analagous to what we */
-  /* do on the sending side. this is more for the sake of symmetry */
-  /* than for the needs of say copy avoidance, but it might also be */
-  /* more realistic - this way one could conceivably go with a */
+  /* do on the sending side - this way one could conceivably go with a */
   /* double-buffering scheme when taking the data an putting it into */
   /* the filesystem or something like that. raj 7/94 */
 
@@ -1031,14 +1003,7 @@ recv_tipc_stream()
 
   cpu_start(tipc_stream_request->measure_cpu);
 
-  /* The loop will exit when the sender does a shutdown, which will */
-  /* return a length of zero   */
-
-  /* there used to be an #ifdef DIRTY call to access_buffer() here,
-     but we have switched from accessing the buffer before the recv()
-     call to accessing the buffer after the recv() call.  The
-     accessing before was, IIRC, related to having dirty data when
-     doing page-flipping copy avoidance. */
+  /* The loop will exit when the sender does a shutdown */
 
   bytes_received = 0;
   receive_calls  = 0;
