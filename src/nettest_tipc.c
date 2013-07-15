@@ -1593,7 +1593,262 @@ Send   Recv    Send   Recv    usec/Tran  per sec  Outbound   Inbound\n\
       }
     }
 
+    /* We now calculate what our "throughput" was for the test. */
+
+    bytes_xferd = (req_size * nummessages) + (rsp_size * nummessages);
+    thruput     = nummessages/elapsed_time;
+
+    if (local_cpu_usage || remote_cpu_usage) {
+      /* We must now do a little math for service demand and cpu
+       utilization for the system(s) Of course, some of the
+       information might be bogus because there was no idle counter in
+       the kernel(s). We need to make a note of this for the user's
+       benefit... */
+      if (local_cpu_usage) {
+        local_cpu_utilization = calc_cpu_util(0.0);
+        /* since calc_service demand is doing ms/Kunit we will
+           multiply the number of transaction by 1024 to get "good"
+           numbers */
+        local_service_demand  = calc_service_demand((double) nummessages*1024,
+                                                    0.0,
+                                                    0.0,
+                                                    0);
+      }
+      else {
+        local_cpu_utilization   = (float) -1.0;
+        local_service_demand    = (float) -1.0;
+      }
+
+      if (remote_cpu_usage) {
+        remote_cpu_utilization = tipc_rr_result->cpu_util;
+        /* since calc_service demand is doing ms/Kunit we will
+           multiply the number of transaction by 1024 to get "good"
+           numbers */
+        remote_service_demand = calc_service_demand((double) nummessages*1024,
+                                                    0.0,
+                                                    remote_cpu_utilization,
+                                                    tipc_rr_result->num_cpus);
+      }
+      else {
+        remote_cpu_utilization = (float) -1.0;
+        remote_service_demand  = (float) -1.0;
+      }
+
+    }
+    else {
+      /* we were not measuring cpu, for the confidence stuff, we */
+      /* should make it -1.0 */
+      local_cpu_utilization     = (float) -1.0;
+      local_service_demand      = (float) -1.0;
+      remote_cpu_utilization = (float) -1.0;
+      remote_service_demand  = (float) -1.0;
+    }
+
+    /* at this point, we want to calculate the confidence information.
+       if debugging is on, calculate_confidence will print-out the
+       parameters we pass it */
+
+    calculate_confidence(confidence_iteration,
+                         elapsed_time,
+                         thruput,
+                         local_cpu_utilization,
+                         remote_cpu_utilization,
+                         local_service_demand,
+                         remote_service_demand);
+
+
     confidence_iteration++;
+
+    /* we are now done with the socket, so close it */
+    close(send_socket);
+  }
+
+  retrieve_confident_values(&elapsed_time,
+                            &thruput,
+                            &local_cpu_utilization,
+                            &remote_cpu_utilization,
+                            &local_service_demand,
+                            &remote_service_demand);
+
+  /* We are now ready to print all the information. If the user has
+     specified zero-level verbosity, we will just print the local
+     service demand, or the remote service demand. If the user has
+     requested verbosity level 1, he will get the basic "streamperf"
+     numbers. If the user has specified a verbosity of greater than 1,
+     we will display a veritable plethora of background information
+     from outside of this block as it it not cpu_measurement
+     specific...  */
+
+  if (confidence < 0) {
+    /* we did not hit confidence, but were we asked to look for it? */
+    if (iteration_max > 1) {
+      display_confidence();
+    }
+  }
+
+  if (local_cpu_usage || remote_cpu_usage) {
+    local_cpu_method = format_cpu_method(cpu_method);
+    remote_cpu_method = format_cpu_method(tipc_rr_result->cpu_method);
+
+    switch (verbosity) {
+    case 0:
+      if (local_cpu_usage) {
+        fprintf(where,
+                cpu_fmt_0,
+                local_service_demand,
+                local_cpu_method,
+                ((print_headers) ||
+                 (result_brand == NULL)) ? "" : result_brand);
+      }
+      else {
+        fprintf(where,
+                cpu_fmt_0,
+                remote_service_demand,
+                remote_cpu_method,
+                ((print_headers) ||
+                 (result_brand == NULL)) ? "" : result_brand);
+      }
+      break;
+    case 1:
+    case 2:
+      if (print_headers) {
+        if ('x' == libfmt) {
+          fprintf(where,
+                  cpu_title,
+                  local_cpu_method,
+                  remote_cpu_method);
+        }
+        else {
+          fprintf(where,
+                  cpu_title_tput,
+                  format_units(),
+                  local_cpu_method,
+                  remote_cpu_method);
+        }
+      }
+
+      fprintf(where,
+              cpu_fmt_1_line_1,         /* the format string */
+              lss_size,         /* local sendbuf size */
+              lsr_size,
+              req_size,         /* how large were the requests */
+              rsp_size,         /* guess */
+              elapsed_time,             /* how long was the test */
+              ('x' == libfmt) ? thruput :
+              calc_thruput_interval_omni(thruput * (req_size+rsp_size),
+                                         1.0),
+              local_cpu_utilization,    /* local cpu */
+              remote_cpu_utilization,   /* remote cpu */
+              local_service_demand,     /* local service demand */
+              remote_service_demand,    /* remote service demand */
+              ((print_headers) ||
+               (result_brand == NULL)) ? "" : result_brand);
+      fprintf(where,
+              cpu_fmt_1_line_2,
+              rss_size,
+              rsr_size);
+      break;
+    }
+  }
+  else {
+    /* The tester did not wish to measure service demand. */
+
+    switch (verbosity) {
+    case 0:
+      fprintf(where,
+              tput_fmt_0,
+              ('x' == libfmt) ? thruput :
+              calc_thruput_interval_omni(thruput * (req_size+rsp_size),
+                                         1.0),
+              ((print_headers) ||
+               (result_brand == NULL)) ? "" : result_brand);
+      break;
+    case 1:
+    case 2:
+      if (print_headers) {
+        fprintf(where,
+                ('x' == libfmt) ? tput_title : tput_title_band,
+                format_units());
+      }
+
+      fprintf(where,
+              tput_fmt_1_line_1,        /* the format string */
+              lss_size,
+              lsr_size,
+              req_size,         /* how large were the requests */
+              rsp_size,         /* how large were the responses */
+              elapsed_time,             /* how long did it take */
+              /* are we trans or do we need to convert to bytes then
+                 bits? at this point, thruput is in our "confident"
+                 transactions per second. we can convert to a
+                 bidirectional bitrate by multiplying that by the sum
+                 of the req_size and rsp_size.  we pass that to
+                 calc_thruput_interval_omni with an elapsed time of
+                 1.0 s to get it converted to [kmg]bits/s or
+                 [KMG]Bytes/s */
+              ('x' == libfmt) ?  thruput :
+              calc_thruput_interval_omni(thruput * (req_size+rsp_size),
+                                         1.0),
+              ((print_headers) ||
+               (result_brand == NULL)) ? "" : result_brand);
+      fprintf(where,
+              tput_fmt_1_line_2,
+              rss_size,                 /* remote recvbuf size */
+              rsr_size);
+
+      break;
+    }
+  }
+
+  /* it would be a good thing to include information about some of the */
+  /* other parameters that may have been set for this test, but at the */
+  /* moment, I do not wish to figure-out all the  formatting, so I will */
+  /* just put this comment here to help remind me that it is something */
+  /* that should be done at a later time. */
+
+  /* how to handle the verbose information in the presence of */
+  /* confidence intervals is yet to be determined... raj 11/94 */
+  if (verbosity > 1) {
+    /* The user wanted to know it all, so we will give it to him. */
+    /* This information will include as much as we can find about */
+    /* TCP statistics, the alignments of the sends and receives */
+    /* and all that sort of rot... */
+
+    /* normally, you might think that if we were messing about with
+       the value of libfmt we would need to put it back again, but
+       since this is basically the last thing we are going to do with
+       it, it does not matter.  so there :) raj 2007-06-08 */
+    /* if the user was asking for transactions, then we report
+       megabits per second for the unidirectional throughput,
+       otherwise we use the desired units. */
+    if ('x' == libfmt) {
+      libfmt = 'm';
+    }
+
+    fprintf(where,
+            ksink_fmt,
+            format_units(),
+            local_send_align,
+            remote_recv_offset,
+            local_send_offset,
+            remote_recv_offset,
+            /* if the user has enable burst mode, we have to remember
+               to account for that in the number of transactions
+               outstanding at any one time. otherwise we will
+               underreport the latency of individual
+               transactions. learned from saf by raj 2007-06-08  */
+            (((double)1.0/thruput)*(double)1000000.0) *
+            (double) (1 + ((first_burst_size > 0) ? first_burst_size : 0)),
+            thruput,
+            calc_thruput_interval_omni(thruput * (double)req_size,1.0),
+            calc_thruput_interval_omni(thruput * (double)rsp_size,1.0));
+
+#ifdef WANT_HISTOGRAM
+    fprintf(where,"\nHistogram of request/response times\n");
+    fflush(where);
+    HIST_report(time_hist);
+#endif /* WANT_HISTOGRAM */
+
   }
 
 }
