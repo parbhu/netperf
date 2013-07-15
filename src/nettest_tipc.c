@@ -147,7 +147,7 @@ create_tipc_socket()
                   &local_socket_prio,
                   sizeof(int)) == SOCKET_ERROR) {
       fprintf(where,
-             "netperf: create_data_socket: so_priority: errno %d\n",
+	      "netperf: create_tipc_socket: so_priority: errno %d\n",
              errno);
       fflush(where);
       local_socket_prio = -2;
@@ -495,7 +495,6 @@ Send   Recv    Send   Recv             Send (avg)          Recv (avg)\n\
 	  break;
 	}
 	perror("netperf: data send error");
-	printf("len was %d\n",len);
 	exit(1);
       }
 
@@ -873,7 +872,7 @@ recv_tipc_stream()
     fflush(where);
   }
 
-  /* create_tipc_send_socket expects to find some things in the global */
+  /* create_tipc_socket expects to find some things in the global */
   /* variables, so set the globals based on the values in the request. */
   /* once the socket has been created, we will set the response values */
   /* based on the updated value of those globals. */
@@ -1101,16 +1100,463 @@ recv_tipc_stream()
 
 
 
+
+
+
+ /* this routine implements the sending (netperf) side of the TIPC_RR */
+ /* test. */
 void 
 send_tipc_rr(char remote_host[])
 {
-  printf("netperf: TIPC rr test.\n");
+
+  char *tput_title = "\
+Local /Remote\n\
+Socket Size   Request  Resp.   Elapsed  Trans.\n\
+Send   Recv   Size     Size    Time     Rate         \n\
+bytes  Bytes  bytes    bytes   secs.    per sec   \n\n";
+
+  char *tput_title_band = "\
+Local /Remote\n\
+Socket Size   Request  Resp.   Elapsed  \n\
+Send   Recv   Size     Size    Time     Throughput \n\
+bytes  Bytes  bytes    bytes   secs.    %s/sec   \n\n";
+
+  char *tput_fmt_0 =
+    "%7.2f %s\n";
+
+  char *tput_fmt_1_line_1 = "\
+%-6d %-6d %-6d   %-6d  %-6.2f   %7.2f   %s\n";
+  char *tput_fmt_1_line_2 = "\
+%-6d %-6d\n";
+
+  char *cpu_title = "\
+Local /Remote\n\
+Socket Size   Request Resp.  Elapsed Trans.   CPU    CPU    S.dem   S.dem\n\
+Send   Recv   Size    Size   Time    Rate     local  remote local   remote\n\
+bytes  bytes  bytes   bytes  secs.   per sec  %% %c    %% %c    us/Tr   us/Tr\n\n";
+
+  char *cpu_title_tput = "\
+Local /Remote\n\
+Socket Size   Request Resp.  Elapsed Tput     CPU    CPU    S.dem   S.dem\n\
+Send   Recv   Size    Size   Time    %-8.8s local  remote local   remote\n\
+bytes  bytes  bytes   bytes  secs.   per sec  %% %c    %% %c    us/Tr   us/Tr\n\n";
+
+  char *cpu_title_latency = "\
+Local /Remote\n\
+Socket Size   Request Resp.  Elapsed Latency  CPU    CPU    S.dem   S.dem\n\
+Send   Recv   Size    Size   Time    usecs    local  remote local   remote\n\
+bytes  bytes  bytes   bytes  secs.   per tran %% %c    %% %c    us/Tr   us/Tr\n\n";
+
+  char *cpu_fmt_0 =
+    "%6.3f %c %s\n";
+
+  char *cpu_fmt_1_line_1 = "\
+%-6d %-6d %-6d  %-6d %-6.2f  %-6.2f  %-6.2f %-6.2f %-6.3f  %-6.3f %s\n";
+
+  char *cpu_fmt_1_line_2 = "\
+%-6d %-6d\n";
+
+  char *ksink_fmt = "\
+Alignment      Offset         RoundTrip  Trans    Throughput\n\
+Local  Remote  Local  Remote  Latency    Rate     %-8.8s/s\n\
+Send   Recv    Send   Recv    usec/Tran  per sec  Outbound   Inbound\n\
+%5d  %5d   %5d  %5d   %-6.3f   %-6.3f %-6.3f    %-6.3f\n";
+
+
+  int                   timed_out = 0;
+  float                 elapsed_time;
+
+  int   	len;
+  char  	*temp_message_ptr;
+  int   	nummessages;
+  SOCKET        send_socket;
+  int   	trans_remaining;
+  double        bytes_xferd;
+
+  struct 	ring_elt *send_ring;
+  struct 	ring_elt *recv_ring;
+
+  int   	rsp_bytes_left;
+  int   	rsp_bytes_recvd;
+
+  float 	local_cpu_utilization;
+  float	 	local_service_demand;
+  float 	remote_cpu_utilization;
+  float 	remote_service_demand;
+  double        thruput;
+
+  //struct addrinfo *local_res;
+  //struct addrinfo *remote_res;
+
+  struct sockaddr_tipc remote_addr;
+  struct tipc_portid   remote_port_id;
+
+  struct        tipc_rr_request_struct   *tipc_rr_request;
+  struct        tipc_rr_response_struct  *tipc_rr_response;
+  struct        tipc_rr_results_struct   *tipc_rr_result;
+
+#ifdef WANT_FIRST_BURST
+#define REQUEST_CWND_INITIAL 2
+  int requests_outstanding = 0;
+  int request_cwnd = REQUEST_CWND_INITIAL;  /* we ass-u-me that having
+                                               three requests
+                                               outstanding at the
+                                               beginning of the test
+                                               is ok with TIPC stacks
+                                               of interest. the first
+                                               two will come from our
+                                               first_burst loop, and
+                                               the third from our
+                                               regularly scheduled
+                                               send */
+#endif
+
+  tipc_rr_request =
+    (struct tipc_rr_request_struct *)netperf_request.content.test_specific_data;
+  tipc_rr_response=
+    (struct tipc_rr_response_struct *)netperf_response.content.test_specific_data;
+  tipc_rr_result =
+    (struct tipc_rr_results_struct *)netperf_response.content.test_specific_data;
+
+#ifdef WANT_HISTOGRAM
+  if (verbosity > 1) {
+    time_hist = HIST_new();
+  }
+#endif /* WANT_HISTOGRAM */
+
+  /* initialize a few counters */
+
+  send_ring = NULL;
+  recv_ring = NULL;
+  confidence_iteration = 1;
+  init_stat();
+
+  /* we have a great-big while loop which controls the number of times */
+  /* we run a particular test. this is for the calculation of a */
+  /* confidence interval (I really should have stayed awake during */
+  /* probstats :). If the user did not request confidence measurement */
+  /* (no confidence is the default) then we will only go though the */
+  /* loop once. the confidence stuff originates from the folks at IBM */
+
+  while (((confidence < 0) && (confidence_iteration < iteration_max)) ||
+         (confidence_iteration <= iteration_min)) {
+
+    /* initialize a few counters. we have to remember that we might be */
+    /* going through the loop more than once. */
+
+    nummessages     = 0;
+    bytes_xferd     = 0.0;
+    times_up        = 0;
+    timed_out       = 0;
+    trans_remaining = 0;
+
+#ifdef WANT_FIRST_BURST
+    /* we have to remember to reset the number of transactions
+       outstanding and the "congestion window for each new
+       iteration. raj 2006-01-31 */
+    requests_outstanding = 0;
+    request_cwnd = REQUEST_CWND_INITIAL;
+#endif
+
+
+    /* set-up the data buffers with the requested alignment and offset. */
+    /* since this is a request/response test, default the send_width and */
+    /* recv_width to 1 and not two raj 7/94 */
+
+    if (send_width == 0) send_width = 1;
+    if (recv_width == 0) recv_width = 1;
+
+    if (send_ring == NULL) {
+      send_ring = allocate_buffer_ring(send_width,
+                                       req_size,
+                                       local_send_align,
+                                       local_send_offset);
+    }
+
+    if (recv_ring == NULL) {
+      recv_ring = allocate_buffer_ring(recv_width,
+                                       rsp_size,
+                                       local_recv_align,
+                                       local_recv_offset);
+    }
+
+    /* If the user has requested cpu utilization measurements, we must */
+    /* calibrate the cpu(s). We will perform this task within the tests */
+    /* themselves. If the user has specified the cpu rate, then */
+    /* calibrate_local_cpu will return rather quickly as it will have */
+    /* nothing to do. If local_cpu_rate is zero, then we will go through */
+    /* all the "normal" calibration stuff and return the rate back.*/
+
+    if (local_cpu_usage) {
+      local_cpu_rate = calibrate_local_cpu(local_cpu_rate);
+    }
+
+    if (!no_control) {
+      /* Tell the remote end to do a listen. The server alters the
+         socket paramters on the other side at this point, hence the
+         reason for all the values being passed in the setup
+         message. If the user did not specify any of the parameters,
+         they will be passed as 0, which will indicate to the remote
+         that no changes beyond the system's default should be
+         used. Alignment is the exception, it will default to 8, which
+         will be no alignment alterations. */
+
+      netperf_request.content.request_type      =       DO_TIPC_RR;
+
+      send_request();
+
+      /* The response from the remote will contain all of the relevant
+         socket parameters for this test type. We will put them back
+         into the variables here so they can be displayed if desired.
+         The remote will have calibrated CPU if necessary, and will
+         have done all the needed set-up we will have calibrated the
+         cpu locally before sending the request, and will grab the
+         counter value right after the connect returns. The remote
+         will grab the counter right after the accept call. This saves
+         the hassle of extra messages being sent for the TCP
+         tests.  */
+
+      recv_response();
+
+      if (!netperf_response.content.serv_errno) {
+        if (debug)
+          fprintf(where,"remote listen done.\n");
+        // Get the id of the netserver tipc socket
+        remote_port_id  = tipc_rr_response->id;
+        rsr_size          = tipc_rr_response->recv_buf_size;
+        rss_size          = tipc_rr_response->send_buf_size;
+        remote_cpu_usage  = tipc_rr_response->measure_cpu;
+        remote_cpu_rate   = tipc_rr_response->cpu_rate;
+        /* make sure that port numbers are in network order */
+      }
+      else {
+        Set_errno(netperf_response.content.serv_errno);
+        fprintf(where,
+                "netperf: remote error %d",
+                netperf_response.content.serv_errno);
+        perror("");
+        fflush(where);
+
+        exit(1);
+      }
+    }
+
+    if ( print_headers ) {
+      print_top_tipc_test_header("TIPC REQUEST/RESPONSE TEST", remote_port_id);
+    }
+
+    memset(&remote_addr, 0, sizeof(remote_addr));
+    remote_addr.family = AF_TIPC;
+    remote_addr.addrtype = TIPC_ADDR_ID;
+    remote_addr.addr.id = remote_port_id;
+    remote_addr.scope = TIPC_ZONE_SCOPE;
+
+    send_socket = create_tipc_socket();
+
+    /*Connect up to the remote port on the data socket  */
+    if (connect(send_socket, 
+		(struct sockaddr *)&remote_addr, 
+		sizeof(remote_addr)) == INVALID_SOCKET){
+      perror("netperf: data socket connect failed");
+
+      exit(1);
+
+    }
+
+    confidence_iteration++;
+  }
+
 }
 
+
+
+
+ /* this routine implements the receive (netserver) side of a TIPC_RR */
+ /* test */
 void
 recv_tipc_rr()
 {
-  printf("netserver: TIPC rr test.\n");
+
+  struct ring_elt 	*send_ring;
+  struct ring_elt 	*recv_ring;
+
+  //struct addrinfo 	*local_res;
+  char 			local_name[BUFSIZ];
+  char 			port_buffer[PORTBUFSIZE];
+
+  //struct        	sockaddr_storage        myaddr_in,
+  //peeraddr_in;
+  struct sockaddr_tipc	myaddr_in, peeraddr_in;
+  SOCKET        	s_listen,s_data;
+  netperf_socklen_t     addrlen;
+  char  		*temp_message_ptr;
+  int   		trans_received;
+  int   		trans_remaining;
+  int   		bytes_sent;
+  int   		request_bytes_recvd;
+  int   		request_bytes_remaining;
+  int   		timed_out = 0;
+  int   		sock_closed = 0;
+  float 		elapsed_time;
+
+  struct        tipc_rr_request_struct   *tipc_rr_request;
+  struct        tipc_rr_response_struct  *tipc_rr_response;
+  struct        tipc_rr_results_struct   *tipc_rr_results;
+
+  tipc_rr_request =
+    (struct tipc_rr_request_struct *)netperf_request.content.test_specific_data;
+  tipc_rr_response =
+    (struct tipc_rr_response_struct *)netperf_response.content.test_specific_data;
+  tipc_rr_results =
+    (struct tipc_rr_results_struct *)netperf_response.content.test_specific_data;
+
+  if (debug) {
+    fprintf(where,"netserver: recv_tipc_rr: entered...\n");
+    fflush(where);
+  }
+
+  /* We want to set-up the listen socket with all the desired */
+  /* parameters and then let the initiator know that all is ready. If */
+  /* socket size defaults are to be used, then the initiator will have */
+  /* sent us 0's. If the socket sizes cannot be changed, then we will */
+  /* send-back what they are. If that information cannot be determined, */
+  /* then we send-back -1's for the sizes. If things go wrong for any */
+  /* reason, we will drop back ten yards and punt. */
+
+  /* If anything goes wrong, we want the remote to know about it. It */
+  /* would be best if the error that the remote reports to the user is */
+  /* the actual error we encountered, rather than some bogus unexpected */
+  /* response type message. */
+
+  if (debug) {
+    fprintf(where,"recv_tipc_rr: setting the response type...\n");
+    fflush(where);
+  }
+
+  netperf_response.content.response_type = TIPC_RR_RESPONSE;
+
+  if (debug) {
+    fprintf(where,"recv_tipc_rr: the response type is set...\n");
+    fflush(where);
+  }
+
+  /* allocate the recv and send rings with the requested alignments */
+  /* and offsets. raj 7/94 */
+  if (debug) {
+    fprintf(where,"recv_tipc_rr: requested recv alignment of %d offset %d\n",
+            tipc_rr_request->recv_alignment,
+            tipc_rr_request->recv_offset);
+    fprintf(where,"recv_tcp_rr: requested send alignment of %d offset %d\n",
+            tipc_rr_request->send_alignment,
+            tipc_rr_request->send_offset);
+    fflush(where);
+  }
+
+  /* at some point, these need to come to us from the remote system */
+  if (send_width == 0) send_width = 1;
+  if (recv_width == 0) recv_width = 1;
+
+  send_ring = allocate_buffer_ring(send_width,
+                                   tipc_rr_request->response_size,
+                                   tipc_rr_request->send_alignment,
+                                   tipc_rr_request->send_offset);
+
+  recv_ring = allocate_buffer_ring(recv_width,
+                                   tipc_rr_request->request_size,
+                                   tipc_rr_request->recv_alignment,
+                                   tipc_rr_request->recv_offset);
+
+
+  /* Grab a socket to listen on, and then listen on it. */
+
+  if (debug) {
+    fprintf(where,"recv_tipc_rr: grabbing a socket...\n");
+    fflush(where);
+  }
+
+  /* create_tipc_socket expects to find some things in the global */
+  /* variables, so set the globals based on the values in the request. */
+  /* once the socket has been created, we will set the response values */
+  /* based on the updated value of those globals. raj 7/94 */
+  lss_size_req = tipc_rr_request->send_buf_size;
+  lsr_size_req = tipc_rr_request->recv_buf_size;
+
+  memset(&myaddr_in, 0, sizeof(myaddr_in));
+  myaddr_in.family = AF_TIPC;
+  myaddr_in.addrtype = TIPC_ADDR_NAME;
+  myaddr_in.addr.name.name.type = NETSERVER_TIPC_DEFAULT;
+  myaddr_in.addr.name.name.instance = 0;
+  myaddr_in.scope = TIPC_ZONE_SCOPE;
+
+  s_listen = create_tipc_socket();
+
+  if (bind(s_listen,
+           (struct sockaddr *)&myaddr_in,
+           sizeof(myaddr_in)) < 0) {
+    perror("Netserver: failed to bind tipc port name\n");
+    exit(1);
+  }
+
+  if (s_listen == INVALID_SOCKET) {
+    netperf_response.content.serv_errno = errno;
+    send_response();
+
+    exit(1);
+  }
+
+  /* Now, let's set-up the socket to listen for connections */
+  if (listen(s_listen, 5) == SOCKET_ERROR) {
+    netperf_response.content.serv_errno = errno;
+    close(s_listen);
+    send_response();
+
+    exit(1);
+  }
+
+  /* Netperf will need the port id of s_listen to be able to connect */
+  /* to netserver. This information is given by getsockname. */
+  addrlen = sizeof(struct sockaddr_tipc);
+  memset(&myaddr_in, 0, sizeof(myaddr_in));
+  if (getsockname(s_listen,
+                  (struct sockaddr*)&myaddr_in,
+                  &addrlen) != 0) {
+    perror("tipc: getsockname failed.");
+    exit(1);
+  }
+  tipc_rr_response->id = myaddr_in.addr.id;
+
+  /* If the initiator wanted cpu measurements, */
+  /* then we must call the calibrate routine, which will return the max */
+  /* rate back to the initiator. If the CPU was not to be measured, or */
+  /* something went wrong with the calibration, we will return a 0.0 to */
+  /* the initiator. */
+
+  tipc_rr_response->cpu_rate = (float)0.0;       /* assume no cpu */
+  tipc_rr_response->measure_cpu = 0;
+
+  if (tipc_rr_request->measure_cpu) {
+    tipc_rr_response->measure_cpu = 1;
+    tipc_rr_response->cpu_rate = calibrate_local_cpu(tipc_rr_request->cpu_rate);
+  }
+
+
+  /* before we send the response back to the initiator, pull some of */
+  /* the socket parms from the globals */
+  tipc_rr_response->send_buf_size = lss_size;
+  tipc_rr_response->recv_buf_size = lsr_size;
+  tipc_rr_response->test_length = tipc_rr_request->test_length;
+  send_response();
+
+  addrlen = sizeof(peeraddr_in);
+
+  if ((s_data = accept(s_listen,
+                       (struct sockaddr *)&peeraddr_in,
+                       &addrlen)) == INVALID_SOCKET) {
+    /* Let's just punt. The remote will be given some information */
+    close(s_listen);
+    exit(1);
+  }
+
 }
 
 
