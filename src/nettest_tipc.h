@@ -95,15 +95,15 @@ struct tipc_rr_response_struct {
   //int   so_sndavoid;    /* could the remote avoid send copies? */
 };
 
-struct tipc_rr_result_struct {
-  //unsigned int  bytes_received; /* ignored initially */
+struct tipc_rr_results_struct {
+  unsigned int  bytes_received; /* ignored initially */
   //unsigned int  recv_calls;     /* ignored initially */
-  //unsigned int  trans_received; /* not ignored  */
-  //float         elapsed_time;   /* how long the test ran */
-  //float         cpu_util;       /* -1 if not measured */
+  unsigned int  trans_received; /* not ignored  */
+  float         elapsed_time;   /* how long the test ran */
+  float         cpu_util;       /* -1 if not measured */
   //float         serv_dem;       /* -1 if not measured */
-  //int           cpu_method;    /* how was cpu util measured? */
-  //int           num_cpus;      /* how many CPUs had the remote? */
+  int           cpu_method;    /* how was cpu util measured? */
+  int           num_cpus;      /* how many CPUs had the remote? */
 };
 
 #endif

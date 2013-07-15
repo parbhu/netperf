@@ -147,7 +147,7 @@ create_tipc_socket()
                   &local_socket_prio,
                   sizeof(int)) == SOCKET_ERROR) {
       fprintf(where,
-	      "netperf: create_tipc_socket: so_priority: errno %d\n",
+             "netperf: create_tipc_socket: so_priority: errno %d\n",
              errno);
       fflush(where);
       local_socket_prio = -2;
@@ -1021,8 +1021,8 @@ recv_tipc_stream()
     /* we access the buffer after the recv() call now, rather than before */
     access_buffer(recv_ring->buffer_ptr,
                   recv_size,
-                  tcp_stream_request->dirty_count,
-                  tcp_stream_request->clean_count);
+                  tipc_stream_request->dirty_count,
+                  tipc_stream_request->clean_count);
 #endif /* DIRTY */
 
 
@@ -1302,6 +1302,26 @@ Send   Recv    Send   Recv    usec/Tran  per sec  Outbound   Inbound\n\
          will be no alignment alterations. */
 
       netperf_request.content.request_type      =       DO_TIPC_RR;
+      tipc_rr_request->recv_buf_size     =       rsr_size_req;
+      tipc_rr_request->send_buf_size     =       rss_size_req;
+      tipc_rr_request->recv_alignment    =       remote_recv_align;
+      tipc_rr_request->recv_offset       =       remote_recv_offset;
+      tipc_rr_request->send_alignment    =       remote_send_align;
+      tipc_rr_request->send_offset       =       remote_send_offset;
+      tipc_rr_request->request_size      =       req_size;
+      tipc_rr_request->response_size     =       rsp_size;
+      tipc_rr_request->measure_cpu       =       remote_cpu_usage;
+      tipc_rr_request->cpu_rate          =       remote_cpu_rate;
+      if (test_time) {
+        tipc_rr_request->test_length     =       test_time;
+      }
+      else {
+        tipc_rr_request->test_length     =       test_trans * -1;
+      }
+
+      if (debug > 1) {
+        fprintf(where,"netperf: send_tipc_rr: requesting TIPC rr test\n");
+      }
 
       send_request();
 
@@ -1360,7 +1380,217 @@ Send   Recv    Send   Recv    usec/Tran  per sec  Outbound   Inbound\n\
       perror("netperf: data socket connect failed");
 
       exit(1);
+    }
 
+    /* Data Socket set-up is finished. If there were problems, either the */
+    /* connect would have failed, or the previous response would have */
+    /* indicated a problem. I failed to see the value of the extra */
+    /* message after the accept on the remote. If it failed, we'll see it */
+    /* here. If it didn't, we might as well start pumping data. */
+
+    /* Set-up the test end conditions. For a request/response test, they */
+    /* can be either time or transaction based. */
+
+    if (test_time) {
+      /* The user wanted to end the test after a period of time. */
+      times_up = 0;
+      trans_remaining = 0;
+      start_timer(test_time);
+    }
+    else {
+      /* The tester wanted to send a number of bytes. */
+      trans_remaining = test_bytes;
+      times_up = 1;
+    }
+
+    /* The cpu_start routine will grab the current time and possibly */
+    /* value of the idle counter for later use in measuring cpu */
+    /* utilization and/or service demand and thruput. */
+
+    cpu_start(local_cpu_usage);
+
+#ifdef WANT_INTERVALS
+    INTERVALS_INIT();
+#endif /* WANT_INTERVALS */
+
+    /* We use an "OR" to control test execution. When the test is */
+    /* controlled by time, the byte count check will always return false. */
+    /* When the test is controlled by byte count, the time test will */
+    /* always return false. When the test is finished, the whole */
+    /* expression will go false and we will stop sending data. I think I */
+    /* just arbitrarily decrement trans_remaining for the timed test, but */
+    /* will not do that just yet... One other question is whether or not */
+    /* the send buffer and the receive buffer should be the same buffer. */
+
+    while ((!times_up) || (trans_remaining > 0)) {
+      /* send the request. we assume that if we use a blocking socket, */
+      /* the request will be sent at one shot. */
+
+#ifdef WANT_FIRST_BURST
+      /* we can inject no more than request_cwnd, which will grow with
+         time, and no more than first_burst_size.  we don't use <= to
+         account for the "regularly scheduled" send call.  of course
+         that makes it more a "max_outstanding_ than a
+         "first_burst_size" but for now we won't fix the names. also,
+         I suspect the extra check against < first_burst_size is
+         redundant since later I expect to make sure that request_cwnd
+         can never get larger than first_burst_size, but just at the
+         moment I'm feeling like a belt and suspenders kind of
+         programmer. raj 2006-01-30 */
+      while ((first_burst_size > 0) &&
+             (requests_outstanding < request_cwnd) &&
+             (requests_outstanding < first_burst_size)) {
+        if (debug) {
+          fprintf(where,
+                  "injecting, req_outstndng %d req_cwnd %d burst %d\n",
+                  requests_outstanding,
+                  request_cwnd,
+                  first_burst_size);
+        }
+        if ((len = send(send_socket,
+                        send_ring->buffer_ptr,
+                        req_size,
+                        0)) != req_size) {
+          /* we should never hit the end of the test in the first burst */
+          perror("send_tipc_rr: initial burst data send error");
+          exit(-1);
+        }
+        requests_outstanding += 1;
+      }
+
+#endif /* WANT_FIRST_BURST */
+
+#ifdef WANT_HISTOGRAM
+      if (verbosity > 1) {
+        /* timestamp just before our call to send, and then again just
+           after the receive raj 8/94 */
+        /* but only if we are actually going to display one. raj
+           2007-02-07 */
+
+        HIST_timestamp(&time_one);
+      }
+#endif /* WANT_HISTOGRAM */
+
+      if ((len = send(send_socket,
+                      send_ring->buffer_ptr,
+                      req_size,
+                      0)) != req_size) {
+        if (SOCKET_EINTR(len) || (errno == 0)) {
+          /* we hit the end of a */
+          /* timed test. */
+          timed_out = 1;
+          break;
+        }
+        perror("send_tipc_rr: data send error");
+        exit(1);
+      }
+      send_ring = send_ring->next;
+
+#ifdef WANT_FIRST_BURST
+      requests_outstanding += 1;
+#endif
+
+      /* receive the response */
+      rsp_bytes_left = rsp_size;
+      temp_message_ptr  = recv_ring->buffer_ptr;
+      while(rsp_bytes_left > 0) {
+        if((rsp_bytes_recvd=recv(send_socket,
+                                 temp_message_ptr,
+                                 rsp_bytes_left,
+                                 0)) == SOCKET_ERROR || rsp_bytes_recvd == 0) {
+                if ( SOCKET_EINTR(rsp_bytes_recvd) ) {
+                    /* We hit the end of a timed test. */
+                        timed_out = 1;
+                        break;
+                }
+          perror("send_tipc_rr: data recv error");
+          exit(1);
+        }
+        rsp_bytes_left -= rsp_bytes_recvd;
+        temp_message_ptr  += rsp_bytes_recvd;
+      }
+      recv_ring = recv_ring->next;
+
+#ifdef WANT_FIRST_BURST
+      /* so, since we've gotten a response back, update the
+         bookkeeping accordingly.  there is one less request
+         outstanding and we can put one more out there than before. */
+      requests_outstanding -= 1;
+      if (request_cwnd < first_burst_size) {
+        request_cwnd += 1;
+        if (debug) {
+          fprintf(where,
+                  "incr req_cwnd to %d first_burst %d reqs_outstndng %d\n",
+                  request_cwnd,
+                  first_burst_size,
+                  requests_outstanding);
+        }
+      }
+#endif
+      if (timed_out) {
+        /* we may have been in a nested while loop - we need */
+        /* another call to break. */
+        break;
+      }
+
+#ifdef WANT_HISTOGRAM
+      if (verbosity > 1) {
+        HIST_timestamp(&time_two);
+        HIST_add(time_hist,delta_micro(&time_one,&time_two));
+      }
+#endif /* WANT_HISTOGRAM */
+
+#ifdef WANT_INTERVALS
+      INTERVALS_WAIT();
+#endif /* WANT_INTERVALS */
+
+      nummessages++;
+      if (trans_remaining) {
+        trans_remaining--;
+      }
+
+      if (debug > 3) {
+        if ((nummessages % 100) == 0) {
+          fprintf(where,
+                  "Transaction %d completed\n",
+                  nummessages);
+          fflush(where);
+        }
+      }
+    }
+    
+    /* At this point we used to call shutdown on the data socket to be
+       sure all the data was delivered, but this was not germane in a
+       request/response test, and it was causing the tests to "hang"
+       when they were being controlled by time. So, I have replaced
+       this shutdown call with a call to close that can be found later
+       in the procedure. */
+
+    /* this call will always give us the elapsed time for the test,
+       and will also store-away the necessaries for cpu utilization */
+
+    cpu_stop(local_cpu_usage,&elapsed_time);    /* was cpu being */
+                                                /* measured? how long */
+                                                /* did we really run? */
+
+    if (!no_control) {
+      /* Get the statistics from the remote end. The remote will have
+         calculated CPU utilization. If it wasn't supposed to care, it
+         will return obvious values. */
+
+      recv_response();
+      if (!netperf_response.content.serv_errno) {
+        if (debug)
+          fprintf(where,"remote results obtained\n");
+      }
+      else {
+        Set_errno(netperf_response.content.serv_errno);
+        fprintf(where,"netperf: remote error %d",
+                netperf_response.content.serv_errno);
+        perror("");
+        fflush(where);
+        exit(1);
+      }
     }
 
     confidence_iteration++;
@@ -1446,7 +1676,7 @@ recv_tipc_rr()
     fprintf(where,"recv_tipc_rr: requested recv alignment of %d offset %d\n",
             tipc_rr_request->recv_alignment,
             tipc_rr_request->recv_offset);
-    fprintf(where,"recv_tcp_rr: requested send alignment of %d offset %d\n",
+    fprintf(where,"recv_tipc_rr: requested send alignment of %d offset %d\n",
             tipc_rr_request->send_alignment,
             tipc_rr_request->send_offset);
     fflush(where);
@@ -1556,6 +1786,157 @@ recv_tipc_rr()
     close(s_listen);
     exit(1);
   }
+
+#ifdef KLUDGE_SOCKET_OPTIONS
+  /* this is for those systems which *INCORRECTLY* fail to pass */
+  /* attributes across an accept() call. Including this goes against */
+  /* my better judgement :( raj 11/95 */
+
+  kludge_socket_options(s_data);
+
+#endif /* KLUDGE_SOCKET_OPTIONS */
+
+  if (debug) {
+    fprintf(where,"recv_tipc_rr: accept completes on the data connection.\n");
+    fflush(where);
+  }
+
+  /* Now it's time to start receiving data on the connection. We will */
+  /* first grab the apropriate counters and then start grabbing. */
+
+  cpu_start(tipc_rr_request->measure_cpu);
+
+  /* The loop will exit when we hit the end of the test time, or when */
+  /* we have exchanged the requested number of transactions. */
+
+  if (tipc_rr_request->test_length > 0) {
+    times_up = 0;
+    trans_remaining = 0;
+    start_timer(tipc_rr_request->test_length + PAD_TIME);
+  }
+  else {
+    times_up = 1;
+    trans_remaining = tipc_rr_request->test_length * -1;
+  }
+
+  trans_received = 0;
+
+  while ((!times_up) || (trans_remaining > 0)) {
+    temp_message_ptr = recv_ring->buffer_ptr;
+    request_bytes_remaining     = tipc_rr_request->request_size;
+    while(request_bytes_remaining > 0) {
+      if((request_bytes_recvd=recv(s_data,
+                                   temp_message_ptr,
+                                   request_bytes_remaining,
+                                   0)) == SOCKET_ERROR) {
+        if (SOCKET_EINTR(request_bytes_recvd))
+        {
+          timed_out = 1;
+          break;
+        }
+
+        netperf_response.content.serv_errno = errno;
+        send_response();
+        exit(1);
+      }
+      else if( request_bytes_recvd == 0 ) {
+        if (debug) {
+          fprintf(where,"zero is my hero\n");
+          fflush(where);
+        }
+        sock_closed = 1;
+        break;
+      }
+      else {
+        request_bytes_remaining -= request_bytes_recvd;
+        temp_message_ptr  += request_bytes_recvd;
+      }
+    }
+
+    recv_ring = recv_ring->next;
+
+    if ((timed_out) || (sock_closed)) {
+      /* we hit the end of the test based on time - or the socket
+         closed on us along the way.  bail out of here now... */
+      if (debug) {
+        fprintf(where,"yo5\n");
+        fflush(where);
+      }
+      break;
+    }
+
+    /* Now, send the response to the remote */
+    if((bytes_sent=send(s_data,
+                        send_ring->buffer_ptr,
+                        tipc_rr_request->response_size,
+                        0)) == SOCKET_ERROR) {
+      if (SOCKET_EINTR(bytes_sent)) {
+        /* the test timer has popped */
+        timed_out = 1;
+        fprintf(where,"yo6\n");
+        fflush(where);
+        break;
+      }
+      netperf_response.content.serv_errno = 992;
+      send_response();
+      exit(1);
+    }
+
+    send_ring = send_ring->next;
+
+    trans_received++;
+    if (trans_remaining) {
+      trans_remaining--;
+    }
+  }
+
+  /* The loop now exits due to timeout or transaction count being */
+  /* reached */
+
+  cpu_stop(tipc_rr_request->measure_cpu,&elapsed_time);
+
+  stop_timer();
+
+  if (timed_out) {
+    /* we ended the test by time, which was at least 2 seconds */
+    /* longer than we wanted to run. so, we want to subtract */
+    /* PAD_TIME from the elapsed_time. */
+    elapsed_time -= PAD_TIME;
+  }
+
+  /* send the results to the sender                     */
+
+  if (debug) {
+    fprintf(where,
+            "recv_tipc_rr: got %d transactions\n",
+            trans_received);
+    fflush(where);
+  }
+
+  tipc_rr_results->bytes_received = (trans_received *
+                                    (tipc_rr_request->request_size +
+                                     tipc_rr_request->response_size));
+  tipc_rr_results->trans_received = trans_received;
+  tipc_rr_results->elapsed_time   = elapsed_time;
+  tipc_rr_results->cpu_method     = cpu_method;
+  tipc_rr_results->num_cpus       = lib_num_loc_cpus;
+  if (tipc_rr_request->measure_cpu) {
+    tipc_rr_results->cpu_util    = calc_cpu_util(elapsed_time);
+  }
+
+  if (debug) {
+    fprintf(where,
+            "recv_tipc_rr: test complete, sending results.\n");
+    fflush(where);
+  }
+
+  /* we are now done with the sockets */
+  close(s_data);
+  close(s_listen);
+
+  send_response();
+
+
 
 }
 
