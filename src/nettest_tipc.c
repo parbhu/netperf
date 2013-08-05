@@ -169,6 +169,9 @@ create_tipc_socket()
 
 }
 
+/* if WANT_MIGRATION is defined, we will use the send_tcp_stream()
+   call in src/nettest_omni.c */
+#ifndef WANT_MIGRATION
 
 /* This routine implements the TIPC unidirectional data transfer test */
 /* (a.k.a. stream). It receives its */
@@ -795,6 +798,7 @@ Send   Recv    Send   Recv             Send (avg)          Recv (avg)\n\
 
 }  
 
+#endif /* WANT_MIGRATION */
 
 void
 recv_tipc_stream()

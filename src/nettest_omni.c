@@ -7120,6 +7120,13 @@ bytes  bytes  bytes   bytes  secs.   per sec  %% %c    %% %c    us/KB   us/KB\n\
   }
 }
 
+void
+send_tipc_stream(char remote_host[])
+{
+
+  send_omni_inner(remote_host, legacy, "MIGRATED TIPC STREAM TEST");
+
+}
 
 #endif /* WANT_MIGRATION */
 
