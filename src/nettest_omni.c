@@ -3687,6 +3687,18 @@ enable_enobufs(int s)
 }
 #endif
 
+/* This routine fills in the addrinfo structs for the tipc test cases */
+void
+get_tipc_addrinfo(struct addrinfo **addr, struct sockaddr_tipc *sa_tipc) {
+
+  *addr = (struct addrinfo*)malloc(sizeof(struct addrinfo)); 
+  memset(*addr, 0, sizeof(struct addrinfo));
+  (*addr)->ai_family = AF_TIPC;
+  (*addr)->ai_socktype = SOCK_STREAM;
+  (*addr)->ai_addrlen = sizeof(struct sockaddr_tipc);
+  (*addr)->ai_addr = (struct sockaddr *)sa_tipc;
+
+}
 
 /* this code is intended to be "the two routines to run them all" for
    BSDish sockets.  it comes about as part of a desire to shrink the
@@ -3719,6 +3731,8 @@ send_omni_inner(char remote_host[], unsigned int legacy_caller, char header_str[
 
   struct addrinfo *local_res;
   struct addrinfo *remote_res;
+
+  struct sockaddr_tipc sa_tipc;
 
   struct	omni_request_struct	*omni_request;
   struct	omni_response_struct	*omni_response;
@@ -3785,6 +3799,14 @@ send_omni_inner(char remote_host[], unsigned int legacy_caller, char header_str[
       time_hist = HIST_new_n(first_burst_size + 1);
     else
       time_hist = HIST_new_n(1);
+  }
+
+  /* if tipc_mode, fill in remote_res and local_res manually 
+     (as the complete_addrinfos() is not compatible with tipc) */
+
+  if (tipc_mode) {
+    get_tipc_addrinfo(&remote_res, &sa_tipc);
+    get_tipc_addrinfo(&local_res, NULL);
   }
 
   /* since we are now disconnected from the code that established the
@@ -5207,6 +5229,8 @@ recv_omni()
   int   ret;
   uint32_t   temp_recvs;
 
+  struct sockaddr_tipc myaddr_in_tipc;
+
   struct	omni_request_struct	*omni_request;
   struct	omni_response_struct	*omni_response;
   struct	omni_results_struct	*omni_results;
@@ -5323,6 +5347,19 @@ recv_omni()
 			  port_buffer,
 			  nf_to_af(omni_request->ipfamily),
 			  omni_request->data_port);
+
+  /* if tipc_mode, fill in local_res manually 
+     (as the complete_addrinfo() is not compatible with tipc) */
+
+  if (tipc_mode) {
+    get_tipc_addrinfo(&local_res, &myaddr_in_tipc);
+    memset(&myaddr_in_tipc, 0, sizeof(myaddr_in_tipc));
+    myaddr_in_tipc.family = AF_TIPC;
+    myaddr_in_tipc.addrtype = TIPC_ADDR_NAME;
+    myaddr_in_tipc.addr.name.name.type = NETSERVER_TIPC_DEFAULT;
+    myaddr_in_tipc.addr.name.name.instance = 0;
+    myaddr_in_tipc.scope = TIPC_ZONE_SCOPE;
+  }
 
   local_res = complete_addrinfo(local_name,
 				local_name,
