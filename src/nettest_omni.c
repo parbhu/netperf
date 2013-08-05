@@ -3352,6 +3352,17 @@ disconnect_data_socket(SOCKET data_socket, int initiate, int do_close, struct so
   /* this needs to be revisited for the netperf receiving case when
      the test is terminated by a Ctrl-C.  raj 2012-01-24 */
 
+  if (tipc_mode) {
+    /* TIPC does not acknowledge connection shutdowns the same way TCP does,
+       so we cannot do the SHUT_WR+recv() hack here */
+
+    if (shutdown(data_socket,SHUT_RDWR) == SOCKET_ERROR && !times_up) {
+      perror("netperf: cannot shutdown tipc stream socket");
+      exit(1);
+    }
+
+  } 
+  else
   if (protocol != IPPROTO_UDP) {
     if (initiate)
       shutdown(data_socket, SHUT_WR);
