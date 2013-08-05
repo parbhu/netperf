@@ -726,6 +726,9 @@ int have_pktinfo = 0;
 struct in_pktinfo in_pktinfo;
 #endif
 
+/* tipc_mode is set if the test is performed over a tipc connection */
+int tipc_mode = 0;  
+
 char *direction_to_str(int direction) {
   if (NETPERF_RECV_ONLY(direction)) return "Receive";
   if (NETPERF_XMIT_ONLY(direction)) return "Send";
@@ -3991,6 +3994,7 @@ send_omni_inner(char remote_host[], unsigned int legacy_caller, char header_str[
       omni_request->response_size	   = rsp_size;
       omni_request->socket_prio            = remote_socket_prio;
       omni_request->socket_tos             = remote_socket_tos;
+      omni_request->tipc_mode		   = tipc_mode; //tipc test or not?
 
       /* we have no else clauses here because we previously set flags
 	 to zero above raj 20090803 */
@@ -5242,6 +5246,14 @@ recv_omni()
 
   if (debug) {
     fprintf(where,"%s: the response type is set...\n",__FUNCTION__);
+    fflush(where);
+  }
+
+  /* Find out whether this is a tipc test or not */
+  tipc_mode = omni_request->tipc_mode;
+
+  if (debug && tipc_mode) {     
+    fprintf(where,"%s: TIPC mode.\n",__FUNCTION__);
     fflush(where);
   }
 
@@ -7124,6 +7136,8 @@ void
 send_tipc_stream(char remote_host[])
 {
 
+  tipc_mode = 1;
+  
   send_omni_inner(remote_host, legacy, "MIGRATED TIPC STREAM TEST");
 
 }
