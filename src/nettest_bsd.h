@@ -139,6 +139,8 @@ struct  omni_response_struct {
 				name that long - and still didn't
 				include the 9NNN model number! */
   char       security_string[16];
+
+  struct     tipc_portid port_id;
 };
 
 struct omni_results_struct {

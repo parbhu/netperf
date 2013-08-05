@@ -3733,6 +3733,7 @@ send_omni_inner(char remote_host[], unsigned int legacy_caller, char header_str[
   struct addrinfo *remote_res;
 
   struct sockaddr_tipc sa_tipc;
+  struct tipc_portid remote_port_id;
 
   struct	omni_request_struct	*omni_request;
   struct	omni_response_struct	*omni_response;
@@ -4157,6 +4158,29 @@ send_omni_inner(char remote_host[], unsigned int legacy_caller, char header_str[
 	remote_recv_width   = omni_response->recv_width;
 	remote_socket_prio  = omni_response->socket_prio;
 	remote_socket_tos   = omni_response->socket_tos;
+        remote_port_id      = omni_response->port_id;
+
+        if (tipc_mode) {
+          /* We have now received the port id of the 
+             netserver tipc socket, which means that 
+	     we can complete the addressing information 
+	     of remote_res. */
+          memset(&sa_tipc, 0, sizeof(sa_tipc));
+          sa_tipc.family = AF_TIPC;
+          sa_tipc.addrtype = TIPC_ADDR_ID;
+          sa_tipc.addr.id = remote_port_id;
+          sa_tipc.scope = TIPC_ZONE_SCOPE;
+
+          if (debug) {
+            int n = sa_tipc.addr.id.node;
+            unsigned int ref = sa_tipc.addr.id.ref;
+            fprintf("Will connect to tipc node: %d.%d.%d ref:%u\n", 
+               tipc_zone(n), 
+               tipc_cluster(n), 
+               tipc_node(n), 
+               ref);
+          }
+        }
 
 	/* make sure that port numbers are in network order because
 	   recv_response will have put everything into host order */
@@ -5572,6 +5596,34 @@ recv_omni()
     omni_response->cpu_rate =
       calibrate_local_cpu(omni_request->cpu_rate);
   }
+
+  if (tipc_mode) {
+
+    /* Netperf will need the port id of s_listen to be able to connect */
+    /* to netserver. This information is given by getsockname. */
+
+    addrlen = sizeof(struct sockaddr_tipc);
+    memset(&myaddr_in_tipc, 0, sizeof(myaddr_in_tipc));
+    if (getsockname(s_listen,
+                  (struct sockaddr*)&myaddr_in_tipc,
+                  &addrlen) != 0) {
+      perror("tipc: getsockname failed.");
+      exit(1);
+    }
+    omni_response->port_id = myaddr_in_tipc.addr.id;
+
+    int n = myaddr_in_tipc.addr.id.node;
+    unsigned int ref = myaddr_in_tipc.addr.id.ref;
+    if (debug) {
+      fprintf(where, "Tipc node: %d.%d.%d ref:%u\n", 
+	tipc_zone(n), 
+	tipc_cluster(n), 
+	tipc_node(n), 
+	ref);
+      fflush(where);
+    }
+  }
+
 
   /* before we send the response back to the initiator, pull some of */
   /* the socket parms from the globals */
