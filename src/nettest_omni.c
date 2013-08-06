@@ -7249,10 +7249,106 @@ bytes  bytes  bytes   bytes  secs.   per sec  %% %c    %% %c    us/KB   us/KB\n\
 void
 send_tipc_stream(char remote_host[])
 {
+  char *tput_title = "\
+Recv   Send    Send                          \n\
+Socket Socket  Message  Elapsed              \n\
+Size   Size    Size     Time     Throughput  \n\
+bytes  bytes   bytes    secs.    %s/sec  \n\n";
+
+  char *tput_fmt_0 =
+    "%7.2f %s\n";
+
+  char *tput_fmt_1 =
+    "%6d %6d %6d    %-6.2f   %7.2f   %s\n";
 
   tipc_mode = 1;
   
   send_omni_inner(remote_host, legacy, "MIGRATED TIPC STREAM TEST");
+
+  if (legacy) {
+
+    /* We are now ready to print all the information, but only if we
+       are truly acting as a legacy test. If the user has specified
+       zero-level verbosity, we will just print the local service
+       demand, or the remote service demand. If the user has requested
+       verbosity level 1, he will get the basic "streamperf"
+       numbers. If the user has specified a verbosity of greater than
+       1, we will display a veritable plethora of background
+       information from outside of this block as it it not
+       cpu_measurement specific...  */
+
+    if (confidence < 0) {
+      /* we did not hit confidence, but were we asked to look for it? */
+      if (iteration_max > 1) {
+	display_confidence();
+      }
+    }
+
+      /* The tester did not wish to measure service demand. */
+
+      switch (verbosity) {
+      case 0:
+	fprintf(where,
+		tput_fmt_0,
+		thruput,
+		((print_headers) ||
+		 (result_brand == NULL)) ? "" : result_brand);
+	break;
+      case 1:
+      case 2:
+	if (print_headers) {
+	  fprintf(where,tput_title,format_units());
+	}
+	fprintf(where,
+		tput_fmt_1,		/* the format string */
+		rsr_size, 		/* remote recvbuf size */
+		lss_size, 		/* local sendbuf size */
+		send_size,	        /* how large were the sends */
+		elapsed_time, 		/* how long did it take */
+		thruput,                /* how fast did it go */
+		((print_headers) ||
+		 (result_brand == NULL)) ? "" : result_brand);
+	break;
+      }
+    }
+
+    /* it would be a good thing to include information about some of the */
+    /* other parameters that may have been set for this test, but at the */
+    /* moment, I do not wish to figure-out all the  formatting, so I will */
+    /* just put this comment here to help remind me that it is something */
+    /* that should be done at a later time. */
+
+    if (verbosity > 1) {
+      /* The user wanted to know it all, so we will give it to him. */
+      /* This information will include as much as we can find about */
+      /* TCP statistics, the alignments of the sends and receives */
+      /* and all that sort of rot... */
+
+      /* this stuff needs to be worked-out in the presence of confidence */
+      /* intervals and multiple iterations of the test... raj 11/94 */
+
+      fprintf(where,
+	      ksink_fmt,
+	      "Bytes",
+	      "Bytes",
+	      "Bytes",
+	      local_send_align,
+	      remote_recv_align,
+	      local_send_offset,
+	      remote_recv_offset,
+	      bytes_sent,
+	      bytes_sent / (double)local_send_calls,
+	      local_send_calls,
+	      bytes_sent / (double)remote_receive_calls,
+	      remote_receive_calls);
+#ifdef WANT_HISTOGRAM
+      fprintf(where,"\n\nHistogram of time spent in send() call.\n");
+      HIST_report(time_hist);
+#endif /* WANT_HISTOGRAM */
+      fflush(where);
+    }
+
+  
 
 }
 
