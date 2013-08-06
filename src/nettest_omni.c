@@ -7477,6 +7477,10 @@ set_omni_defaults_by_legacy_testname() {
     req_size = rsp_size = 1;
     connection_test = 1;
   }
+  else if (strcasecmp(test_name,"TIPC_STREAM") == 0){
+    protocol = 0;
+    direction = NETPERF_XMIT;
+  }
   else if (strcasecmp(test_name,"omni") == 0) {
     /* there is not much to do here but clear the legacy flag */
     was_legacy = 0;
