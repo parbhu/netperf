@@ -784,6 +784,9 @@ is_multicast_addr(struct addrinfo *res) {
     return IN6_IS_ADDR_MULTICAST(bar);
   }
 #endif
+  case AF_TIPC: {
+    return 0; //Multicast not possible for tipc stream 
+  }
   default:
     fprintf(where,
 	    "Unexpected Address Family for Multicast Check %u\n",
@@ -3823,21 +3826,22 @@ send_omni_inner(char remote_host[], unsigned int legacy_caller, char header_str[
     get_tipc_addrinfo(&remote_res, &sa_tipc);
     get_tipc_addrinfo(&local_res, NULL);
   }
+  else {
+    /* since we are now disconnected from the code that established the
+       control socket, and since we want to be able to use different
+       protocols and such, we are passed the name of the remote host and
+       must turn that into the test specific addressing information. */
 
-  /* since we are now disconnected from the code that established the
-     control socket, and since we want to be able to use different
-     protocols and such, we are passed the name of the remote host and
-     must turn that into the test specific addressing information. */
-
-  complete_addrinfos(&remote_res,
+    complete_addrinfos(&remote_res,
 		     &local_res,
 		     remote_host,
 		     socket_type,
 		     protocol,
 		     0);
 
-  if ( print_headers ) {
-    print_top_test_header(header_str,local_res,remote_res);
+    if ( print_headers ) {
+      print_top_test_header(header_str,local_res,remote_res);
+    }
   }
 
   /* initialize a few counters */
@@ -4123,14 +4127,16 @@ send_omni_inner(char remote_host[], unsigned int legacy_caller, char header_str[
 	 local IP/name so we can extract them from the data_socket. */
       getsockname(data_socket, (struct sockaddr *)&my_addr, &my_addr_len);
 
-      ret = get_sockaddr_family_addr_port(&my_addr,
+      if (!tipc_mode) {//Relies on IP
+        ret = get_sockaddr_family_addr_port(&my_addr,
 					  nf_to_af(omni_request->ipfamily),
 					  omni_request->netperf_ip,
 					  &(omni_request->netperf_port));
-      ret = get_sockaddr_family_addr_port((struct sockaddr_storage *)remote_res->ai_addr,
+        ret = get_sockaddr_family_addr_port((struct sockaddr_storage *)remote_res->ai_addr,
 					  nf_to_af(omni_request->ipfamily),
 					  omni_request->netserver_ip,
 					  &(omni_request->data_port));
+      }
       /* if the user didn't explicitly set the remote data address we
 	 don't want to pass along the one we picked implicitly, or a
 	 netserver sitting behind a (BLETCH) NAT will be asked to try
@@ -4188,23 +4194,27 @@ send_omni_inner(char remote_host[], unsigned int legacy_caller, char header_str[
           if (debug) {
             int n = sa_tipc.addr.id.node;
             unsigned int ref = sa_tipc.addr.id.ref;
-            fprintf("Will connect to tipc node: %d.%d.%d ref:%u\n", 
+
+	    fprintf(where,"remote listen done.\n");
+            fprintf(where,"remote tipc node: %d.%d.%d ref:%u\n", 
                tipc_zone(n), 
                tipc_cluster(n), 
                tipc_node(n), 
                ref);
+	    fflush(where);
           }
         }
-
-	/* make sure that port numbers are in network order because
-	   recv_response will have put everything into host order */
-	set_port_number(remote_res,
+	else {
+	  /* make sure that port numbers are in network order because
+	     recv_response will have put everything into host order */
+	  set_port_number(remote_res,
 			(unsigned short)omni_response->data_port);
 
-	if (debug) {
-	  fprintf(where,"remote listen done.\n");
-	  fprintf(where,"remote port is %u\n",get_port_number(remote_res));
-	  fflush(where);
+	  if (debug) {
+	    fprintf(where,"remote listen done.\n");
+	    fprintf(where,"remote port is %u\n",get_port_number(remote_res));
+	    fflush(where);
+	  }
 	}
 	/* just in case the remote didn't null terminate */
 	if (NULL == remote_system_model) {
@@ -5398,14 +5408,15 @@ recv_omni()
     myaddr_in_tipc.addr.name.name.instance = 0;
     myaddr_in_tipc.scope = TIPC_ZONE_SCOPE;
   }
-
-  local_res = complete_addrinfo(local_name,
+  else {
+    local_res = complete_addrinfo(local_name,
 				local_name,
 				port_buffer,
 				nf_to_af(omni_request->ipfamily),
 				nst_to_hst(omni_request->socket_type),
 				omni_request->protocol,
 				0);
+  }
 
   s_listen = omni_create_data_socket(local_res);
 
