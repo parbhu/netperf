@@ -3607,7 +3607,10 @@ omni_create_data_socket(struct addrinfo *res)
 {
   SOCKET temp_socket;
 
-  temp_socket = create_data_socket(res);
+  if (res->ai_family == AF_TIPC)
+    temp_socket = create_tipc_socket();  //Routine in nettest_tipc.c
+  else
+    temp_socket = create_data_socket(res);
 
   if (temp_socket != SOCKET_ERROR) {
     if (local_cong_control_req[0] != '\0') {
