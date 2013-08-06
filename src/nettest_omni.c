@@ -7261,6 +7261,24 @@ bytes  bytes   bytes    secs.    %s/sec  \n\n";
   char *tput_fmt_1 =
     "%6d %6d %6d    %-6.2f   %7.2f   %s\n";
 
+  char *cpu_title = "\
+Recv   Send    Send                          Utilization       Service Demand\n\
+Socket Socket  Message  Elapsed              Send     Recv     Send    Recv\n\
+Size   Size    Size     Time     Throughput  local    remote   local   remote\n\
+bytes  bytes   bytes    secs.    %-8.8s/s  %% %c      %% %c      us/KB   us/KB\n\n";
+
+  char *cpu_fmt_0 =
+    "%6.3f %c %s\n";
+
+  char *cpu_fmt_1 =
+    "%6d %6d %6d    %-6.2f     %7.2f   %-6.2f   %-6.2f   %-6.3f  %-6.3f %s\n";
+
+  char *ksink_fmt = "\n\
+Alignment      Offset         %-8.8s %-8.8s    Sends   %-8.8s Recvs\n\
+Local  Remote  Local  Remote  Xfered   Per                 Per\n\
+Send   Recv    Send   Recv             Send (avg)          Recv (avg)\n\
+%5d   %5d  %5d   %5d %6"PRId64"  %6.2f    %6"PRId64"   %6.2f %6"PRId64"\n";
+
   tipc_mode = 1;
   
   send_omni_inner(remote_host, legacy, "MIGRATED TIPC STREAM TEST");
@@ -7283,6 +7301,55 @@ bytes  bytes   bytes    secs.    %s/sec  \n\n";
 	display_confidence();
       }
     }
+
+    if (local_cpu_usage || remote_cpu_usage) {
+
+      switch (verbosity) {
+      case 0:
+	if (local_cpu_usage) {
+	  fprintf(where,
+		  cpu_fmt_0,
+		  local_service_demand,
+		  local_cpu_method,
+		  ((print_headers) ||
+		   (result_brand == NULL)) ? "" : result_brand);
+	}
+	else {
+	  fprintf(where,
+		  cpu_fmt_0,
+		  remote_service_demand,
+		  remote_cpu_method,
+		  ((print_headers) ||
+		   (result_brand == NULL)) ? "" : result_brand);
+	}
+	break;
+      case 1:
+      case 2:
+	if (print_headers) {
+	  fprintf(where,
+		  cpu_title,
+		  format_units(),
+		  local_cpu_method,
+		  remote_cpu_method);
+	}
+
+	fprintf(where,
+		cpu_fmt_1,		/* the format string */
+		rsr_size,		/* remote recvbuf size */
+		lss_size,		/* local sendbuf size */
+		send_size,	        /* how large were the sends */
+		elapsed_time,		/* how long was the test */
+		thruput, 		/* what was the xfer rate */
+		local_cpu_utilization,	/* local cpu */
+		remote_cpu_utilization,	/* remote cpu */
+		local_service_demand,	/* local service demand */
+		remote_service_demand,	/* remote service demand */
+		((print_headers) ||
+		 (result_brand == NULL)) ? "" : result_brand);
+	break;
+      }
+    }
+    else {
 
       /* The tester did not wish to measure service demand. */
 
@@ -7348,7 +7415,7 @@ bytes  bytes   bytes    secs.    %s/sec  \n\n";
       fflush(where);
     }
 
-  
+  }  
 
 }
 
