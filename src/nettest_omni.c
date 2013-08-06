@@ -4191,6 +4191,12 @@ send_omni_inner(char remote_host[], unsigned int legacy_caller, char header_str[
           sa_tipc.addr.id = remote_port_id;
           sa_tipc.scope = TIPC_ZONE_SCOPE;
 
+	  /* Now, when we have the port id of netserver,
+	     we can finally print out the test header. 
+	     This routine is in nettest_tipc.c */
+	  if (print_headers)
+	    print_top_tipc_test_header(header_str,sa_tipc.addr.id.node);
+
           if (debug) {
             int n = sa_tipc.addr.id.node;
             unsigned int ref = sa_tipc.addr.id.ref;
