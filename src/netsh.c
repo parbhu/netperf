@@ -1255,6 +1255,7 @@ scan_cmd_line(int argc, char *argv[])
 #ifdef WANT_OMNI
     else if ((strcasecmp(test_name,"OMNI") == 0) ||
 #ifdef WANT_MIGRATION
+	     (strcasecmp(test_name,"TIPC_RR") == 0) ||
 	     (strcasecmp(test_name,"TIPC_STREAM") == 0) ||
   	     (strcasecmp(test_name,"TCP_STREAM") == 0) ||
 	     (strcasecmp(test_name,"TCP_MAERTS") == 0) ||

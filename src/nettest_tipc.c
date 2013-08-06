@@ -1105,7 +1105,9 @@ recv_tipc_stream()
 
 
 
-
+/* if WANT_MIGRATION is defined, we will use the send_tipc_rr()
+   call in src/nettest_omni.c */
+#ifndef WANT_MIGRATION
 
  /* this routine implements the sending (netperf) side of the TIPC_RR */
  /* test. */
@@ -1856,7 +1858,7 @@ Send   Recv    Send   Recv    usec/Tran  per sec  Outbound   Inbound\n\
   }
 
 }
-
+#endif /* WANT_MIGRATION */
 
 
 

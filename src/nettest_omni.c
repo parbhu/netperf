@@ -7425,6 +7425,16 @@ Send   Recv    Send   Recv             Send (avg)          Recv (avg)\n\
 
 }
 
+void
+send_tipc_rr(char remote_host[]) {
+
+  tipc_mode = 1;
+
+  send_omni_inner(remote_host, legacy, "MIGRATED TIPC REQUEST/RESPONSE TEST");
+
+}
+
+
 #endif /* WANT_MIGRATION */
 
 
