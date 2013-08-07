@@ -7491,6 +7491,13 @@ set_omni_defaults_by_legacy_testname() {
     protocol = 0;
     direction = NETPERF_XMIT;
   }
+  else if (strcasecmp(test_name,"TIPC_RR") == 0) {
+    protocol = 0;
+    req_size = rsp_size = 1;
+    direction = 0;
+    direction |= NETPERF_XMIT;
+    direction |= NETPERF_RECV;
+  }
   else if (strcasecmp(test_name,"omni") == 0) {
     /* there is not much to do here but clear the legacy flag */
     was_legacy = 0;
