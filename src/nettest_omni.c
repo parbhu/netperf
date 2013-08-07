@@ -3848,7 +3848,7 @@ send_omni_inner(char remote_host[], unsigned int legacy_caller, char header_str[
 
   need_socket   = 1;
 
-  if (connection_test)
+  if (connection_test && !tipc_mode)
     pick_next_port_number(local_res,remote_res);
 
 
@@ -4355,7 +4355,7 @@ send_omni_inner(char remote_host[], unsigned int legacy_caller, char header_str[
     again:
 
       if (need_socket) {
-	if (connection_test)
+	if (connection_test && !tipc_mode)
 
 	  pick_next_port_number(local_res,remote_res);
 
@@ -4388,7 +4388,7 @@ send_omni_inner(char remote_host[], unsigned int legacy_caller, char header_str[
 	  timed_out = 1;
 	  break;
 	}
-	else if ((ret == -2) && connection_test) {
+	else if ((ret == -2) && connection_test && !tipc_mode) {
 	  /* transient error  on a connection test means go around and
 	     try again with another local port number */
 	  if (debug) {
