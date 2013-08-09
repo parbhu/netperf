@@ -5404,7 +5404,6 @@ recv_omni()
 
   if (tipc_mode) {
     get_tipc_addrinfo(&local_res, &myaddr_in_tipc);
-    memset(&myaddr_in_tipc, 0, sizeof(myaddr_in_tipc));
 		sockaddr_from_type_inst(NETSERVER_TIPC_DEFAULT, 0, &myaddr_in_tipc);
   }
   else {

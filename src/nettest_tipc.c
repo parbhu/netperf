@@ -123,6 +123,8 @@ create_tipc_socket()
 	 a sockaddr_tipc given the tipc_portid. */
 void sockaddr_from_id(struct tipc_portid portid, struct sockaddr_tipc *sa)
 {
+	memset(sa, 0, sizeof(struct sockaddr_tipc));
+
 	sa->family = AF_TIPC;
 	sa->addrtype = TIPC_ADDR_ID;
 	sa->addr.id = portid;
@@ -134,6 +136,8 @@ void sockaddr_from_id(struct tipc_portid portid, struct sockaddr_tipc *sa)
    a sockaddr_tipc given the type and the instance. */
 void sockaddr_from_type_inst(unsigned int type, unsigned int instance, struct sockaddr_tipc *sa)
 {
+	memset(sa, 0, sizeof(struct sockaddr_tipc));
+
 	sa->family = AF_TIPC;
 	sa->addrtype = TIPC_ADDR_NAME;
 	sa->addr.name.name.type = type;
