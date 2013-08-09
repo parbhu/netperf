@@ -5404,11 +5404,7 @@ recv_omni()
   if (tipc_mode) {
     get_tipc_addrinfo(&local_res, &myaddr_in_tipc);
     memset(&myaddr_in_tipc, 0, sizeof(myaddr_in_tipc));
-    myaddr_in_tipc.family = AF_TIPC;
-    myaddr_in_tipc.addrtype = TIPC_ADDR_NAME;
-    myaddr_in_tipc.addr.name.name.type = NETSERVER_TIPC_DEFAULT;
-    myaddr_in_tipc.addr.name.name.instance = 0;
-    myaddr_in_tipc.scope = TIPC_ZONE_SCOPE;
+		sockaddr_from_type_inst(NETSERVER_TIPC_DEFAULT, 0, &myaddr_in_tipc);
   }
   else {
     local_res = complete_addrinfo(local_name,

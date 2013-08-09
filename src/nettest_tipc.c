@@ -4,6 +4,7 @@
 /*		print_top_tipc_header		*/
 /*		create_tipc_socket			*/
 /*		sockaddr_from_id				*/
+/*		sockaddr_from_type_inst	*/
 /*														*/
 /******************************/
 
@@ -126,3 +127,16 @@ void sockaddr_from_id(struct tipc_portid portid, struct sockaddr_tipc *sa)
 	sa->addr.id = portid;
 	sa->scope = TIPC_ZONE_SCOPE;
 }
+
+
+/* Routine that fills in the addressing information of
+   a sockaddr_tipc given the type and the instance. */
+void sockaddr_from_type_inst(unsigned int type, unsigned int instance, struct sockaddr_tipc *sa)
+{
+	sa->family = AF_TIPC;
+	sa->addrtype = TIPC_ADDR_NAME;
+	sa->addr.name.name.type = type;
+	sa->addr.name.name.instance = instance;
+	sa->scope = TIPC_ZONE_SCOPE;
+}
+
