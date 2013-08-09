@@ -5280,6 +5280,7 @@ recv_omni()
   uint32_t   temp_recvs;
 
   struct sockaddr_tipc myaddr_in_tipc;
+	struct tipc_portid my_portid;
 
   struct	omni_request_struct	*omni_request;
   struct	omni_response_struct	*omni_response;
@@ -5625,26 +5626,9 @@ recv_omni()
     /* Netperf will need the port id of s_listen to be able to connect */
     /* to netserver. This information is given by getsockname. */
 
-    addrlen = sizeof(struct sockaddr_tipc);
-    memset(&myaddr_in_tipc, 0, sizeof(myaddr_in_tipc));
-    if (getsockname(s_listen,
-                  (struct sockaddr*)&myaddr_in_tipc,
-                  &addrlen) != 0) {
-      perror("tipc: getsockname failed.");
-      exit(1);
-    }
-    omni_response->port_id = myaddr_in_tipc.addr.id;
+		get_portid(s_listen, &myaddr_in_tipc, &my_portid);
 
-    int n = myaddr_in_tipc.addr.id.node;
-    unsigned int ref = myaddr_in_tipc.addr.id.ref;
-    if (debug) {
-      fprintf(where, "Tipc node: %d.%d.%d ref:%u\n", 
-	tipc_zone(n), 
-	tipc_cluster(n), 
-	tipc_node(n), 
-	ref);
-      fflush(where);
-    }
+    omni_response->port_id = my_portid;
   }
 
 

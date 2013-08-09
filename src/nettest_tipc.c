@@ -5,6 +5,7 @@
 /*		create_tipc_socket			*/
 /*		sockaddr_from_id				*/
 /*		sockaddr_from_type_inst	*/
+/*		get_portid							*/
 /*														*/
 /******************************/
 
@@ -140,3 +141,20 @@ void sockaddr_from_type_inst(unsigned int type, unsigned int instance, struct so
 	sa->scope = TIPC_ZONE_SCOPE;
 }
 
+
+void get_portid(SOCKET s_listen, struct sockaddr_tipc *myaddr_in_tipc, struct tipc_portid *port_id)
+{
+	netperf_socklen_t addrlen;
+
+	addrlen = sizeof(struct sockaddr_tipc);
+	memset(myaddr_in_tipc, 0, sizeof(struct sockaddr_tipc));
+
+	if (getsockname(s_listen,
+		(struct sockaddr*)&myaddr_in_tipc,
+		&addrlen) != 0) {
+			perror("get_portid: getsockname failed.");
+			exit(1);
+	}
+
+	*port_id = myaddr_in_tipc->addr.id;
+}
