@@ -74,6 +74,7 @@ char	netperf_id[]="\
 #include "netsh.h"
 #include "netlib.h"
 #include "nettest_bsd.h"
+#include "nettest_tipc.h"
 
 #ifdef WANT_UNIX
 #include "nettest_unix.h"

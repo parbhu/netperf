@@ -136,6 +136,7 @@ char nettest_omni_id[]="\
 #include "netlib.h"
 #include "netsh.h"
 #include "nettest_bsd.h"
+#include "nettest_tipc.h"
 
 /* we only really use this once, but the initial patch to
    src/nettest_bsd.c used it in several places. keep it as a macro
@@ -4195,7 +4196,7 @@ send_omni_inner(char remote_host[], unsigned int legacy_caller, char header_str[
 	     we can finally print out the test header. 
 	     This routine is in nettest_tipc.c */
 	  if (print_headers)
-	    print_top_tipc_test_header(header_str,sa_tipc.addr.id.node);
+	    print_top_tipc_test_header(header_str,sa_tipc.addr.id);
 
           if (debug) {
             int n = sa_tipc.addr.id.node;
@@ -7459,12 +7460,6 @@ Local /Remote\n\
 Socket Size   Request Resp.  Elapsed Tput     CPU    CPU    S.dem   S.dem\n\
 Send   Recv   Size    Size   Time    %-8.8s local  remote local   remote\n\
 bytes  bytes  bytes   bytes  secs.   per sec  %% %c    %% %c    us/KB   us/KB\n\n";
-
-  char *cpu_title_latency = "\
-Local /Remote\n\
-Socket Size   Request Resp.  Elapsed Latency  CPU    CPU    S.dem   S.dem\n\
-Send   Recv   Size    Size   Time    usecs    local  remote local   remote\n\
-bytes  bytes  bytes   bytes  secs.   per tran %% %c    %% %c    us/Tr   us/Tr\n\n";
 
   char *cpu_fmt_0 =
     "%6.3f %c %s\n";

@@ -813,7 +813,6 @@ recv_tipc_stream()
   float elapsed_time;
   double   bytes_received;
   struct ring_elt *recv_ring;
-  char port_buffer[PORTBUFSIZE];
 
 #ifdef DO_SELECT
   fd_set readfds;
@@ -1871,12 +1870,6 @@ recv_tipc_rr()
   struct ring_elt 	*send_ring;
   struct ring_elt 	*recv_ring;
 
-  //struct addrinfo 	*local_res;
-  char 			local_name[BUFSIZ];
-  char 			port_buffer[PORTBUFSIZE];
-
-  //struct        	sockaddr_storage        myaddr_in,
-  //peeraddr_in;
   struct sockaddr_tipc	myaddr_in, peeraddr_in;
   SOCKET        	s_listen,s_data;
   netperf_socklen_t     addrlen;
@@ -2225,7 +2218,7 @@ scan_tipc_args(int argc, char *argv[])
   extern char   *optarg;          /* pointer to option string   */
 
   int           c;
-  int           have_uuid = 0;
+  //int           have_uuid = 0;
 
   char arg1[BUFSIZ];  /* argument holders          */
   char arg2[BUFSIZ];
@@ -2346,7 +2339,7 @@ scan_tipc_args(int argc, char *argv[])
       strncpy(test_uuid,optarg,sizeof(test_uuid));
       /* strncpy may leave us with a string without a null at the end */
       test_uuid[sizeof(test_uuid) - 1] = 0;
-      have_uuid = 1;
+      //have_uuid = 1;
       break;
     }
   }
