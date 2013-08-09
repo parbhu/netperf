@@ -1,31 +1,31 @@
 /******************************/
-/*		nettest_tipc.c					*/
-/*														*/
-/*		print_top_tipc_header		*/
-/*		create_tipc_socket			*/
-/*		sockaddr_from_id				*/
-/*		sockaddr_from_type_inst	*/
-/*		get_portid							*/
-/*														*/
+/*    nettest_tipc.c          */
+/*                            */
+/*    print_top_tipc_header   */
+/*    create_tipc_socket      */
+/*    sockaddr_from_id        */
+/*    sockaddr_from_type_inst */
+/*    get_portid              */
+/*                            */
 /******************************/
 
-#include <stdio.h> 
-#include <string.h> 
+#include <stdio.h>
+#include <string.h>
 #include <stdlib.h>
 #include <errno.h>
-#include <linux/tipc.h> 
+#include <linux/tipc.h>
 #include <unistd.h>
 
 #include "netlib.h"
-#include "netsh.h" 
+#include "netsh.h"
 
 extern int lss_size_req;    /* requested local socket send buffer size */
 extern int lsr_size_req;    /* requested local socket recv buffer size */
-extern int lss_size;             /* local  socket send buffer size       */
+extern int lss_size;        /* local socket send buffer size           */
 extern int lsr_size;
 
 void
-print_top_tipc_test_header(char test_name[], struct tipc_portid remote_port) 
+print_top_tipc_test_header(char test_name[], struct tipc_portid remote_port)
 {
   int n = remote_port.node;
   unsigned int ref = remote_port.ref;
@@ -83,12 +83,12 @@ create_tipc_socket()
   set_sock_buffer (sock, SEND_BUFFER, lss_size_req, &lss_size);
   set_sock_buffer (sock, RECV_BUFFER, lsr_size_req, &lsr_size);
 
-	/* In the code for tcp stream test case there is code for 
-	setting SO_RCV_COPYAVPID, SO_SND_COPYAVOID, TCP_NODELAY,
-	SCTP_NODELAY, TCP_CORK, SO_KEEPALIVE, SO_REUSEADDR and
-	TCP_CORK on the created socket. This cannot be done 
-	for tipc. */
-	
+  /* In the code for tcp stream test case there is code for
+     setting SO_RCV_COPYAVPID, SO_SND_COPYAVOID, TCP_NODELAY,
+     SCTP_NODELAY, TCP_CORK, SO_KEEPALIVE, SO_REUSEADDR and
+     TCP_CORK on the created socket. This cannot be done
+     for tipc. */
+
 #if defined(SO_PRIORITY)
   if (local_socket_prio >= 0) {
     if (setsockopt(sock,
@@ -120,15 +120,15 @@ create_tipc_socket()
 }
 
 /* Routine that fills in the addressing information of
-	 a sockaddr_tipc given the tipc_portid. */
+   a sockaddr_tipc given the tipc_portid. */
 void sockaddr_from_id(struct tipc_portid portid, struct sockaddr_tipc *sa)
 {
-	memset(sa, 0, sizeof(struct sockaddr_tipc));
+  memset(sa, 0, sizeof(struct sockaddr_tipc));
 
-	sa->family = AF_TIPC;
-	sa->addrtype = TIPC_ADDR_ID;
-	sa->addr.id = portid;
-	sa->scope = TIPC_ZONE_SCOPE;
+  sa->family = AF_TIPC;
+  sa->addrtype = TIPC_ADDR_ID;
+  sa->addr.id = portid;
+  sa->scope = TIPC_ZONE_SCOPE;
 }
 
 
@@ -136,29 +136,29 @@ void sockaddr_from_id(struct tipc_portid portid, struct sockaddr_tipc *sa)
    a sockaddr_tipc given the type and the instance. */
 void sockaddr_from_type_inst(unsigned int type, unsigned int instance, struct sockaddr_tipc *sa)
 {
-	memset(sa, 0, sizeof(struct sockaddr_tipc));
+  memset(sa, 0, sizeof(struct sockaddr_tipc));
 
-	sa->family = AF_TIPC;
-	sa->addrtype = TIPC_ADDR_NAME;
-	sa->addr.name.name.type = type;
-	sa->addr.name.name.instance = instance;
-	sa->scope = TIPC_ZONE_SCOPE;
+  sa->family = AF_TIPC;
+  sa->addrtype = TIPC_ADDR_NAME;
+  sa->addr.name.name.type = type;
+  sa->addr.name.name.instance = instance;
+  sa->scope = TIPC_ZONE_SCOPE;
 }
 
 
 void get_portid(SOCKET sd, struct sockaddr_tipc *sa, struct tipc_portid *portid)
 {
-	netperf_socklen_t addrlen;
+  netperf_socklen_t addrlen;
 
-	addrlen = sizeof(struct sockaddr_tipc);
-	memset(sa, 0, sizeof(struct sockaddr_tipc));
+  addrlen = sizeof(struct sockaddr_tipc);
+  memset(sa, 0, sizeof(struct sockaddr_tipc));
 
-	if (getsockname(sd,
-		(struct sockaddr*)&sa,
-		&addrlen) != 0) {
-			perror("get_portid: getsockname failed.");
-			exit(1);
-	}
+  if (getsockname(sd,
+    (struct sockaddr*)&sa,
+    &addrlen) != 0) {
+      perror("get_portid: getsockname failed.");
+      exit(1);
+  }
 
-	*portid = sa->addr.id;
+  *portid = sa->addr.id;
 }

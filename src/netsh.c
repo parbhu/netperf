@@ -1177,7 +1177,6 @@ scan_cmd_line(int argc, char *argv[])
      strcmp. raj 20101220 */
     if (
 #ifndef WANT_MIGRATION
-	//(strcasecmp(test_name,"TIPC_STREAM") == 0) ||
 	(strcasecmp(test_name,"TCP_STREAM") == 0) ||
 	(strcasecmp(test_name,"TCP_MAERTS") == 0) ||
 	(strcasecmp(test_name,"TCP_RR") == 0) ||
@@ -1256,19 +1255,20 @@ scan_cmd_line(int argc, char *argv[])
 #ifdef WANT_OMNI
     else if ((strcasecmp(test_name,"OMNI") == 0) ||
 #ifdef WANT_MIGRATION
-	     (strcasecmp(test_name,"TIPC_RR") == 0) ||
-	     (strcasecmp(test_name,"TIPC_STREAM") == 0) ||
-  	     (strcasecmp(test_name,"TCP_STREAM") == 0) ||
-	     (strcasecmp(test_name,"TCP_MAERTS") == 0) ||
+       (strcasecmp(test_name,"TCP_STREAM") == 0) ||
+       (strcasecmp(test_name,"TCP_MAERTS") == 0) ||
 	     (strcasecmp(test_name,"TCP_RR") == 0) ||
 	     (strcasecmp(test_name,"TCP_CRR") == 0) ||
 	     (strcasecmp(test_name,"UDP_STREAM") == 0) ||
-	     (strcasecmp(test_name,"UDP_RR") == 0) ||
+       (strcasecmp(test_name,"UDP_RR") == 0) ||
+       (strcasecmp(test_name,"TIPC_STREAM") == 0) ||
+       (strcasecmp(test_name,"TIPC_RR") == 0) ||
 #endif
 	     (strcasecmp(test_name,"UUID") == 0)) {
       scan_omni_args(argc, argv);
     }
 #endif
+
     /* what is our default value for the output units?  if the test
        name contains "RR" or "rr" or "Rr" or "rR" then the default is
        'x' for transactions. otherwise it is 'm' for megabits (10^6)

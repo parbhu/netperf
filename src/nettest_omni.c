@@ -728,7 +728,7 @@ struct in_pktinfo in_pktinfo;
 #endif
 
 /* tipc_mode is set if the test is performed over a tipc connection */
-int tipc_mode = 0;  
+int tipc_mode = 0;
 
 char *direction_to_str(int direction) {
   if (NETPERF_RECV_ONLY(direction)) return "Receive";
@@ -786,7 +786,7 @@ is_multicast_addr(struct addrinfo *res) {
   }
 #endif
   case AF_TIPC: {
-    return 0; //Multicast not possible for tipc stream 
+    return 0; //Multicast not possible for tipc stream
   }
   default:
     fprintf(where,
@@ -3365,7 +3365,7 @@ disconnect_data_socket(SOCKET data_socket, int initiate, int do_close, struct so
       exit(1);
     }
 
-  } 
+  }
   else
   if (protocol != IPPROTO_UDP) {
     if (initiate)
@@ -3612,7 +3612,7 @@ omni_create_data_socket(struct addrinfo *res)
   SOCKET temp_socket;
 
   if (res->ai_family == AF_TIPC)
-    temp_socket = create_tipc_socket();  //Routine in nettest_tipc.c
+    temp_socket = create_tipc_socket();
   else
     temp_socket = create_data_socket(res);
 
@@ -3709,7 +3709,7 @@ enable_enobufs(int s)
 void
 get_tipc_addrinfo(struct addrinfo **addr, struct sockaddr_tipc *sa_tipc) {
 
-  *addr = (struct addrinfo*)malloc(sizeof(struct addrinfo)); 
+  *addr = (struct addrinfo*)malloc(sizeof(struct addrinfo));
   memset(*addr, 0, sizeof(struct addrinfo));
   (*addr)->ai_family = AF_TIPC;
   (*addr)->ai_socktype = SOCK_STREAM;
@@ -3820,7 +3820,7 @@ send_omni_inner(char remote_host[], unsigned int legacy_caller, char header_str[
       time_hist = HIST_new_n(1);
   }
 
-  /* if tipc_mode, fill in remote_res and local_res manually 
+  /* if tipc_mode, fill in remote_res and local_res manually
      (as the complete_addrinfos() is not compatible with tipc) */
 
   if (tipc_mode) {
@@ -4179,16 +4179,16 @@ send_omni_inner(char remote_host[], unsigned int legacy_caller, char header_str[
 	remote_recv_width   = omni_response->recv_width;
 	remote_socket_prio  = omni_response->socket_prio;
 	remote_socket_tos   = omni_response->socket_tos;
-        remote_port_id      = omni_response->port_id;
+	remote_port_id      = omni_response->port_id;
 
         if (tipc_mode) {
-          /* After receiving the port id of the netserver 
-					tipc socket, we can complete the addressing 
-					information of remote_res. */
-					sockaddr_from_id(remote_port_id,&sa_tipc);
+          /* After receiving the port id of the netserver
+             tipc socket, we can complete the addressing
+             information of remote_res. */
+          sockaddr_from_id(remote_port_id,&sa_tipc);
 
-	  /* Now, when we have the port id of netserver,
-	     we can finally print out the test header. 
+          /* Now, when we have the port id of netserver
+	     we can finally print out the test header.
 	     This routine is in nettest_tipc.c */
 	  if (print_headers)
 	    print_top_tipc_test_header(header_str,sa_tipc.addr.id);
@@ -4198,17 +4198,17 @@ send_omni_inner(char remote_host[], unsigned int legacy_caller, char header_str[
             unsigned int ref = sa_tipc.addr.id.ref;
 
 	    fprintf(where,"remote listen done.\n");
-            fprintf(where,"remote tipc node: %d.%d.%d ref:%u\n", 
-               tipc_zone(n), 
-               tipc_cluster(n), 
-               tipc_node(n), 
+            fprintf(where,"remote tipc node: %d.%d.%d ref:%u\n",
+               tipc_zone(n),
+               tipc_cluster(n),
+               tipc_node(n),
                ref);
 	    fflush(where);
           }
         }
 	else {
-	  /* make sure that port numbers are in network order because
-	     recv_response will have put everything into host order */
+          /* make sure that port numbers are in network order because
+             recv_response will have put everything into host order */
 	  set_port_number(remote_res,
 			(unsigned short)omni_response->data_port);
 
@@ -5327,7 +5327,7 @@ recv_omni()
   /* Find out whether this is a tipc test or not */
   tipc_mode = omni_request->tipc_mode;
 
-  if (debug && tipc_mode) {     
+  if (debug && tipc_mode) {
     fprintf(where,"%s: TIPC mode.\n",__FUNCTION__);
     fflush(where);
   }
@@ -5399,7 +5399,7 @@ recv_omni()
 			  nf_to_af(omni_request->ipfamily),
 			  omni_request->data_port);
 
-  /* if tipc_mode, fill in local_res manually 
+  /* if tipc_mode, fill in local_res manually
      (as the complete_addrinfo() is not compatible with tipc) */
 
   if (tipc_mode) {
@@ -5621,12 +5621,10 @@ recv_omni()
   }
 
   if (tipc_mode) {
-
     /* Netperf will need the port id of s_listen to be able to connect */
     /* to netserver. This information is given by getsockname. */
 
-		get_portid(s_listen, &myaddr_in_tipc, &my_portid);
-
+    get_portid(s_listen, &myaddr_in_tipc, &my_portid);
     omni_response->port_id = my_portid;
   }
 
@@ -7261,7 +7259,7 @@ Send   Recv    Send   Recv             Send (avg)          Recv (avg)\n\
 %5d   %5d  %5d   %5d %6"PRId64"  %6.2f    %6"PRId64"   %6.2f %6"PRId64"\n";
 
   tipc_mode = 1;
-  
+
   send_omni_inner(remote_host, legacy, "MIGRATED TIPC STREAM TEST");
 
   if (legacy) {
@@ -7396,7 +7394,7 @@ Send   Recv    Send   Recv             Send (avg)          Recv (avg)\n\
       fflush(where);
     }
 
-  }  
+  }
 
 }
 
