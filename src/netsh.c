@@ -1269,10 +1269,6 @@ scan_cmd_line(int argc, char *argv[])
       scan_omni_args(argc, argv);
     }
 #endif
-    else if ((strcasecmp(test_name,"TIPC_STREAM") == 0) ||
-	     (strcasecmp(test_name,"TIPC_RR") == 0)) {
-      scan_tipc_args(argc, argv);
-    }
     /* what is our default value for the output units?  if the test
        name contains "RR" or "rr" or "Rr" or "rR" then the default is
        'x' for transactions. otherwise it is 'm' for megabits (10^6)
