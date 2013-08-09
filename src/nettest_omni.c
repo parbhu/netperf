@@ -3705,18 +3705,6 @@ enable_enobufs(int s)
 }
 #endif
 
-/* This routine fills in the addrinfo structs for the tipc test cases */
-void
-get_tipc_addrinfo(struct addrinfo **addr, struct sockaddr_tipc *sa_tipc) {
-
-  *addr = (struct addrinfo*)malloc(sizeof(struct addrinfo));
-  memset(*addr, 0, sizeof(struct addrinfo));
-  (*addr)->ai_family = AF_TIPC;
-  (*addr)->ai_socktype = SOCK_STREAM;
-  (*addr)->ai_addrlen = sizeof(struct sockaddr_tipc);
-  (*addr)->ai_addr = (struct sockaddr *)sa_tipc;
-
-}
 
 /* this code is intended to be "the two routines to run them all" for
    BSDish sockets.  it comes about as part of a desire to shrink the

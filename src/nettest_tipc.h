@@ -25,5 +25,6 @@ extern SOCKET create_tipc_socket();
 extern void sockaddr_from_id(struct tipc_portid portid, struct sockaddr_tipc *sa);
 extern void sockaddr_from_type_inst(unsigned int type, unsigned int instance, struct sockaddr_tipc *sa);
 extern void get_portid(SOCKET s, struct sockaddr_tipc *sa, struct tipc_portid *portid);
+extern void get_tipc_addrinfo(struct addrinfo **addr, struct sockaddr_tipc *sa);
 
 #endif
