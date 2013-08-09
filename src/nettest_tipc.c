@@ -38,7 +38,7 @@ print_top_tipc_test_header(char test_name[], struct tipc_portid remote_port)
 
 /* Function creating the tipc socket and set some options
 for it. Used in both send and receive side for tipc stream
-test case */
+and tipc request/response test cases. */
 SOCKET
 create_tipc_socket()
 {
@@ -146,19 +146,19 @@ void sockaddr_from_type_inst(unsigned int type, unsigned int instance, struct so
 }
 
 
-void get_portid(SOCKET s_listen, struct sockaddr_tipc *myaddr_in_tipc, struct tipc_portid *port_id)
+void get_portid(SOCKET sd, struct sockaddr_tipc *sa, struct tipc_portid *portid)
 {
 	netperf_socklen_t addrlen;
 
 	addrlen = sizeof(struct sockaddr_tipc);
-	memset(myaddr_in_tipc, 0, sizeof(struct sockaddr_tipc));
+	memset(sa, 0, sizeof(struct sockaddr_tipc));
 
-	if (getsockname(s_listen,
-		(struct sockaddr*)&myaddr_in_tipc,
+	if (getsockname(sd,
+		(struct sockaddr*)&sa,
 		&addrlen) != 0) {
 			perror("get_portid: getsockname failed.");
 			exit(1);
 	}
 
-	*port_id = myaddr_in_tipc->addr.id;
+	*portid = sa->addr.id;
 }
