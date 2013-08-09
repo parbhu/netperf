@@ -1,9 +1,9 @@
+/* Test specific definitions for netperf's tipc socket tests. */
+
 #ifndef TIPC_H
 #define TIPC_H
 
 #define NETSERVER_TIPC_DEFAULT 6118
-
-/* Test specific definitions for netperf's tipc socket tests. */
 
 
 /* Following routines are defined in nettest_tipc.c */

@@ -48,7 +48,6 @@
 #define OMNI_WANT_KEEPALIVE  0x80000000
 
 #include <linux/tipc.h>
-#define NETSERVER_TIPC_DEFAULT 6118
 
 struct  omni_request_struct {
   int32_t    send_buf_size;         /* SO_SNDBUF */
