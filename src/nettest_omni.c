@@ -4182,15 +4182,10 @@ send_omni_inner(char remote_host[], unsigned int legacy_caller, char header_str[
         remote_port_id      = omni_response->port_id;
 
         if (tipc_mode) {
-          /* We have now received the port id of the 
-             netserver tipc socket, which means that 
-	     we can complete the addressing information 
-	     of remote_res. */
-          memset(&sa_tipc, 0, sizeof(sa_tipc));
-          sa_tipc.family = AF_TIPC;
-          sa_tipc.addrtype = TIPC_ADDR_ID;
-          sa_tipc.addr.id = remote_port_id;
-          sa_tipc.scope = TIPC_ZONE_SCOPE;
+          /* After receiving the port id of the netserver 
+					tipc socket, we can complete the addressing 
+					information of remote_res. */
+					sockaddr_from_id(remote_port_id,&sa_tipc);
 
 	  /* Now, when we have the port id of netserver,
 	     we can finally print out the test header. 

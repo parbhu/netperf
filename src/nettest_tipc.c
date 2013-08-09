@@ -3,6 +3,7 @@
 /*														*/
 /*		print_top_tipc_header		*/
 /*		create_tipc_socket			*/
+/*		sockaddr_from_id				*/
 /*														*/
 /******************************/
 
@@ -114,4 +115,14 @@ create_tipc_socket()
 
   return sock;
 
+}
+
+/* Routine that fills in the addressing information of
+	 a sockaddr_tipc given the tipc_portid. */
+void sockaddr_from_id(struct tipc_portid portid, struct sockaddr_tipc *sa)
+{
+	sa->family = AF_TIPC;
+	sa->addrtype = TIPC_ADDR_ID;
+	sa->addr.id = portid;
+	sa->scope = TIPC_ZONE_SCOPE;
 }

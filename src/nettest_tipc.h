@@ -22,5 +22,6 @@ extern void recv_tipc_rr();
 /* Used in nettest_omni.c */
 extern void print_top_tipc_test_header(char test_name[], struct tipc_portid remote_port);
 extern SOCKET create_tipc_socket();
+extern void sockaddr_from_id(struct tipc_portid portid, struct sockaddr_tipc *sa);
 
 #endif
