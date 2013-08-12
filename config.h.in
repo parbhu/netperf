@@ -398,6 +398,9 @@
    UTILIZATION */
 #undef WANT_SPIN
 
+/* Define to one to include TIPC tests. */
+#undef WANT_TIPC
+
 /* Define to one to include Unix Domain socket tests. */
 #undef WANT_UNIX
 

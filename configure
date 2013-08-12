@@ -4590,6 +4590,15 @@ fi
 done
 
 
+ac_fn_c_check_header_mongrel "$LINENO" "linux/tipc.h" "ac_cv_header_linux_tipc_h" "$ac_includes_default"
+if test "x$ac_cv_header_linux_tipc_h" = xyes; then :
+
+$as_echo "#define WANT_TIPC /**/" >>confdefs.h
+
+fi
+
+
+
 # Some platforms require these.  There may be a better way.
 { $as_echo "$as_me:${as_lineno-$LINENO}: checking for main in -lsocket" >&5
 $as_echo_n "checking for main in -lsocket... " >&6; }

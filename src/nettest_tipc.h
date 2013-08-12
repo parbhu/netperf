@@ -3,6 +3,10 @@
 #ifndef TIPC_H
 #define TIPC_H
 
+struct omni_tipc_portid {
+	unsigned int ref;
+	unsigned int node;
+};
 #define NETSERVER_TIPC_DEFAULT 6118
 
 
@@ -19,12 +23,16 @@ extern void send_tipc_rr(char remote_host[]);
 extern void recv_tipc_stream();
 extern void recv_tipc_rr();
 
+
+
+/* sockaddr_tipc -> sockaddr_storage */
+
 /* Used in nettest_omni.c */
-extern void print_top_tipc_test_header(char test_name[], struct tipc_portid remote_port);
+extern void print_top_tipc_test_header(char test_name[], struct omni_tipc_portid remote_port);
 extern SOCKET create_tipc_socket();
-extern void sockaddr_from_id(struct tipc_portid portid, struct sockaddr_tipc *sa);
-extern void sockaddr_from_type_inst(unsigned int type, unsigned int instance, struct sockaddr_tipc *sa);
-extern void get_portid(SOCKET s, struct sockaddr_tipc *sa, struct tipc_portid *portid);
-extern void get_tipc_addrinfo(struct addrinfo **addr, struct sockaddr_tipc *sa);
+extern void sockaddr_from_id(struct omni_tipc_portid portid, struct sockaddr_storage *sa);
+extern void sockaddr_from_type_inst(unsigned int type, unsigned int instance, struct sockaddr_storage *sa);
+extern void get_portid(SOCKET s, struct sockaddr_storage *sa, struct omni_tipc_portid *portid);
+extern void get_tipc_addrinfo(struct addrinfo **addr, struct sockaddr_storage *sa);
 
 #endif

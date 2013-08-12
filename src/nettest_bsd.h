@@ -47,7 +47,7 @@
 /* room in the middle */
 #define OMNI_WANT_KEEPALIVE  0x80000000
 
-#include <linux/tipc.h>
+#include "nettest_tipc.h"
 
 struct  omni_request_struct {
   int32_t    send_buf_size;         /* SO_SNDBUF */
@@ -139,7 +139,7 @@ struct  omni_response_struct {
 				include the 9NNN model number! */
   char       security_string[16];
 
-  struct     tipc_portid port_id;
+  struct     omni_tipc_portid port_id;
 };
 
 struct omni_results_struct {

@@ -24,3 +24,5 @@ src/netserver
 netserver_output
 tags
 src/tags
+configure
+config.h.in~

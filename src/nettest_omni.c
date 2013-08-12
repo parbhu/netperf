@@ -3738,8 +3738,7 @@ send_omni_inner(char remote_host[], unsigned int legacy_caller, char header_str[
   struct addrinfo *local_res;
   struct addrinfo *remote_res;
 
-  struct sockaddr_tipc sa_tipc;
-  struct tipc_portid remote_port_id;
+  struct omni_tipc_portid remote_port_id;
 
   struct	omni_request_struct	*omni_request;
   struct	omni_response_struct	*omni_response;
@@ -3812,7 +3811,7 @@ send_omni_inner(char remote_host[], unsigned int legacy_caller, char header_str[
      (as the complete_addrinfos() is not compatible with tipc) */
 
   if (tipc_mode) {
-    get_tipc_addrinfo(&remote_res, &sa_tipc);
+    get_tipc_addrinfo(&remote_res, &remote_addr);
     get_tipc_addrinfo(&local_res, NULL);
   }
   else {
@@ -4173,24 +4172,16 @@ send_omni_inner(char remote_host[], unsigned int legacy_caller, char header_str[
           /* After receiving the port id of the netserver
              tipc socket, we can complete the addressing
              information of remote_res. */
-          sockaddr_from_id(remote_port_id,&sa_tipc);
+          sockaddr_from_id(remote_port_id,&remote_addr);
 
           /* Now, when we have the port id of netserver
 	     we can finally print out the test header.
 	     This routine is in nettest_tipc.c */
 	  if (print_headers)
-	    print_top_tipc_test_header(header_str,sa_tipc.addr.id);
+	    print_top_tipc_test_header(header_str,remote_port_id);
 
           if (debug) {
-            int n = sa_tipc.addr.id.node;
-            unsigned int ref = sa_tipc.addr.id.ref;
-
 	    fprintf(where,"remote listen done.\n");
-            fprintf(where,"remote tipc node: %d.%d.%d ref:%u\n",
-               tipc_zone(n),
-               tipc_cluster(n),
-               tipc_node(n),
-               ref);
 	    fflush(where);
           }
         }
@@ -5267,8 +5258,7 @@ recv_omni()
   int   ret;
   uint32_t   temp_recvs;
 
-  struct sockaddr_tipc myaddr_in_tipc;
-	struct tipc_portid my_portid;
+  struct omni_tipc_portid my_portid;
 
   struct	omni_request_struct	*omni_request;
   struct	omni_response_struct	*omni_response;
@@ -5391,8 +5381,8 @@ recv_omni()
      (as the complete_addrinfo() is not compatible with tipc) */
 
   if (tipc_mode) {
-    get_tipc_addrinfo(&local_res, &myaddr_in_tipc);
-		sockaddr_from_type_inst(NETSERVER_TIPC_DEFAULT, 0, &myaddr_in_tipc);
+    get_tipc_addrinfo(&local_res, &myaddr_in);
+		sockaddr_from_type_inst(NETSERVER_TIPC_DEFAULT, 0, &myaddr_in);
   }
   else {
     local_res = complete_addrinfo(local_name,
@@ -5612,7 +5602,7 @@ recv_omni()
     /* Netperf will need the port id of s_listen to be able to connect */
     /* to netserver. This information is given by getsockname. */
 
-    get_portid(s_listen, &myaddr_in_tipc, &my_portid);
+    get_portid(s_listen, &myaddr_in, &my_portid);
     omni_response->port_id = my_portid;
   }
 

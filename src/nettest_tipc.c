@@ -14,11 +14,14 @@
 #include <string.h>
 #include <stdlib.h>
 #include <errno.h>
-#include <linux/tipc.h>
 #include <unistd.h>
 
 #include "netlib.h"
 #include "netsh.h"
+#include "nettest_tipc.h"
+
+#ifdef WANT_TIPC
+#include <linux/tipc.h>
 
 extern int lss_size_req;    /* requested local socket send buffer size */
 extern int lsr_size_req;    /* requested local socket recv buffer size */
@@ -26,7 +29,7 @@ extern int lss_size;        /* local socket send buffer size           */
 extern int lsr_size;
 
 void
-print_top_tipc_test_header(char test_name[], struct tipc_portid remote_port)
+print_top_tipc_test_header(char test_name[], struct omni_tipc_portid remote_port)
 {
   int n = remote_port.node;
   unsigned int ref = remote_port.ref;
@@ -121,53 +124,67 @@ create_tipc_socket()
 }
 
 /* Routine that fills in the addressing information of
-   a sockaddr_tipc given the tipc_portid. */
-void sockaddr_from_id(struct tipc_portid portid, struct sockaddr_tipc *sa)
+   a sockaddr_storage given the omni_tipc_portid. */
+void sockaddr_from_id(struct omni_tipc_portid portid, struct sockaddr_storage *sa)
 {
-  memset(sa, 0, sizeof(struct sockaddr_tipc));
+  // cast sa to a sockaddr_tipc
+  struct sockaddr_tipc *sa_tipc = (struct sockaddr_tipc*)sa;  
 
-  sa->family = AF_TIPC;
-  sa->addrtype = TIPC_ADDR_ID;
-  sa->addr.id = portid;
-  sa->scope = TIPC_ZONE_SCOPE;
+  memset(sa_tipc, 0, sizeof(struct sockaddr_tipc));
+
+  sa_tipc->family = AF_TIPC;
+  sa_tipc->addrtype = TIPC_ADDR_ID;
+  sa_tipc->addr.id.node = portid.node;
+  sa_tipc->addr.id.ref = portid.ref;
+  sa_tipc->scope = TIPC_ZONE_SCOPE;
 }
 
 
 /* Routine that fills in the addressing information of
-   a sockaddr_tipc given the type and the instance. */
-void sockaddr_from_type_inst(unsigned int type, unsigned int instance, struct sockaddr_tipc *sa)
+   a sockaddr_storage given the type and the instance. */
+void sockaddr_from_type_inst(unsigned int type, unsigned int instance, struct sockaddr_storage *sa)
 {
-  memset(sa, 0, sizeof(struct sockaddr_tipc));
+  // cast sa to a sockaddr_tipc
+  struct sockaddr_tipc *sa_tipc = (struct sockaddr_tipc*)sa;
 
-  sa->family = AF_TIPC;
-  sa->addrtype = TIPC_ADDR_NAME;
-  sa->addr.name.name.type = type;
-  sa->addr.name.name.instance = instance;
-  sa->scope = TIPC_ZONE_SCOPE;
+  memset(sa_tipc, 0, sizeof(struct sockaddr_tipc));
+
+  sa_tipc->family = AF_TIPC;
+  sa_tipc->addrtype = TIPC_ADDR_NAME;
+  sa_tipc->addr.name.name.type = type;
+  sa_tipc->addr.name.name.instance = instance;
+  sa_tipc->scope = TIPC_ZONE_SCOPE;
 }
 
 
-void get_portid(SOCKET sd, struct sockaddr_tipc *sa, struct tipc_portid *portid)
+void get_portid(SOCKET sd, struct sockaddr_storage *sa, struct omni_tipc_portid *portid)
 {
+  // cast sa to a sockaddr_tipc
+  struct sockaddr_tipc *sa_tipc = (struct sockaddr_tipc*)sa;
+
   netperf_socklen_t addrlen;
 
   addrlen = sizeof(struct sockaddr_tipc);
-  memset(sa, 0, sizeof(struct sockaddr_tipc));
+  memset(sa_tipc, 0, sizeof(struct sockaddr_tipc));
 
   if (getsockname(sd,
-    (struct sockaddr*)&sa,
+    (struct sockaddr*)&sa_tipc,
     &addrlen) != 0) {
       perror("get_portid: getsockname failed.");
       exit(1);
   }
 
-  *portid = sa->addr.id;
+  portid->ref = sa_tipc->addr.id.ref;
+  portid->node = sa_tipc->addr.id.node;
 }
 
 
 /* This routine fills in the addrinfo structs for the tipc test cases */
 void
-get_tipc_addrinfo(struct addrinfo **addr, struct sockaddr_tipc *sa_tipc) {
+get_tipc_addrinfo(struct addrinfo **addr, struct sockaddr_storage *sa) {
+
+  // cast sa to a sockaddr_tipc
+  struct sockaddr_tipc *sa_tipc = (struct sockaddr_tipc*)sa;
 
   *addr = (struct addrinfo*)malloc(sizeof(struct addrinfo));
   memset(*addr, 0, sizeof(struct addrinfo));
@@ -177,3 +194,14 @@ get_tipc_addrinfo(struct addrinfo **addr, struct sockaddr_tipc *sa_tipc) {
   (*addr)->ai_addr = (struct sockaddr *)sa_tipc;
 
 }
+
+#else
+void print_top_tipc_test_header(char test_name[], struct omni_tipc_portid remote_port){}
+SOCKET create_tipc_socket(){return 0;}
+void sockaddr_from_id(struct omni_tipc_portid portid, struct sockaddr_storage *sa){}
+void sockaddr_from_type_inst(unsigned int type, unsigned int instance, struct sockaddr_storage *sa){}
+void get_portid(SOCKET s, struct sockaddr_storage *sa, struct omni_tipc_portid *portid){}
+void get_tipc_addrinfo(struct addrinfo **addr, struct sockaddr_storage *sa){}
+
+
+#endif
