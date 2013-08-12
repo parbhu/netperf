@@ -32,7 +32,7 @@ extern void print_top_tipc_test_header(char test_name[], struct omni_tipc_portid
 extern SOCKET create_tipc_socket();
 extern void sockaddr_from_id(struct omni_tipc_portid portid, struct sockaddr_storage *sa);
 extern void sockaddr_from_type_inst(unsigned int type, unsigned int instance, struct sockaddr_storage *sa);
-extern void get_portid(SOCKET s, struct sockaddr_storage *sa, struct omni_tipc_portid *portid);
+extern void get_portid(SOCKET s, struct omni_tipc_portid *portid);
 extern void get_tipc_addrinfo(struct addrinfo **addr, struct sockaddr_storage *sa);
 
 #endif

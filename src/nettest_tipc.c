@@ -157,15 +157,14 @@ void sockaddr_from_type_inst(unsigned int type, unsigned int instance, struct so
 }
 
 
-void get_portid(SOCKET sd, struct sockaddr_storage *sa, struct omni_tipc_portid *portid)
+void get_portid(SOCKET sd, struct omni_tipc_portid *portid)
 {
   // cast sa to a sockaddr_tipc
-  struct sockaddr_tipc *sa_tipc = (struct sockaddr_tipc*)sa;
+  struct sockaddr_tipc sa_tipc;
 
   netperf_socklen_t addrlen;
 
   addrlen = sizeof(struct sockaddr_tipc);
-  memset(sa_tipc, 0, sizeof(struct sockaddr_tipc));
 
   if (getsockname(sd,
     (struct sockaddr*)&sa_tipc,
@@ -174,8 +173,8 @@ void get_portid(SOCKET sd, struct sockaddr_storage *sa, struct omni_tipc_portid 
       exit(1);
   }
 
-  portid->ref = sa_tipc->addr.id.ref;
-  portid->node = sa_tipc->addr.id.node;
+  portid->ref = sa_tipc.addr.id.ref;
+  portid->node = sa_tipc.addr.id.node;
 }
 
 
@@ -200,7 +199,7 @@ void print_top_tipc_test_header(char test_name[], struct omni_tipc_portid remote
 SOCKET create_tipc_socket(){return 0;}
 void sockaddr_from_id(struct omni_tipc_portid portid, struct sockaddr_storage *sa){}
 void sockaddr_from_type_inst(unsigned int type, unsigned int instance, struct sockaddr_storage *sa){}
-void get_portid(SOCKET s, struct sockaddr_storage *sa, struct omni_tipc_portid *portid){}
+void get_portid(SOCKET s, struct omni_tipc_portid *portid){}
 void get_tipc_addrinfo(struct addrinfo **addr, struct sockaddr_storage *sa){}
 
 

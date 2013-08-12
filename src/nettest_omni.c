@@ -5602,10 +5602,9 @@ recv_omni()
     /* Netperf will need the port id of s_listen to be able to connect */
     /* to netserver. This information is given by getsockname. */
 
-    get_portid(s_listen, &myaddr_in, &my_portid);
+    get_portid(s_listen, &my_portid);
     omni_response->port_id = my_portid;
   }
-
 
   /* before we send the response back to the initiator, pull some of */
   /* the socket parms from the globals */
