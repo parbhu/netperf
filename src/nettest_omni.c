@@ -4180,23 +4180,12 @@ send_omni_inner(char remote_host[], unsigned int legacy_caller, char header_str[
 
 	  if (print_headers)
 	    print_top_tipc_test_header(header_str,remote_port_id);
-
-          if (debug) {
-	    fprintf(where,"remote listen done.\n");
-	    fflush(where);
-          }
         }
 	else {
           /* make sure that port numbers are in network order because
              recv_response will have put everything into host order */
 	  set_port_number(remote_res,
 			(unsigned short)omni_response->data_port);
-
-	  if (debug) {
-	    fprintf(where,"remote listen done.\n");
-	    fprintf(where,"remote port is %u\n",get_port_number(remote_res));
-	    fflush(where);
-	  }
 	}
 	/* just in case the remote didn't null terminate */
 	if (NULL == remote_system_model) {
@@ -5304,11 +5293,6 @@ recv_omni()
 
   /* Find out whether this is a tipc test or not */
   tipc_mode = omni_request->tipc_mode;
-
-  if (debug && tipc_mode) {
-    fprintf(where,"%s: TIPC mode.\n",__FUNCTION__);
-    fflush(where);
-  }
 
   /* Grab a socket to listen on, and then listen on it. */
 
