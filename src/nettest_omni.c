@@ -7203,6 +7203,8 @@ bytes  bytes  bytes   bytes  secs.   per sec  %% %c    %% %c    us/KB   us/KB\n\
   }
 }
 
+#endif /* WANT_MIGRATION */
+
 void
 send_tipc_stream(char remote_host[])
 {
@@ -7608,8 +7610,6 @@ Send   Recv    Send   Recv    usec/Tran  per sec  Outbound   Inbound\n\
 
 }
 
-
-#endif /* WANT_MIGRATION */
 
 
 /* using legacy test names will cause certain default settings to be
