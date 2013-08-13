@@ -4332,7 +4332,6 @@ send_omni_inner(char remote_host[], unsigned int legacy_caller, char header_str[
 
       if (need_socket) {
 	if (connection_test && !tipc_mode)
-
 	  pick_next_port_number(local_res,remote_res);
 
 	data_socket = omni_create_data_socket(local_res);
