@@ -128,7 +128,7 @@ create_tipc_socket()
 void sockaddr_from_id(struct omni_tipc_portid portid, struct sockaddr_storage *sa)
 {
   // cast sa to a sockaddr_tipc
-  struct sockaddr_tipc *sa_tipc = (struct sockaddr_tipc*)sa;  
+  struct sockaddr_tipc *sa_tipc = (struct sockaddr_tipc*)sa;
 
   memset(sa_tipc, 0, sizeof(struct sockaddr_tipc));
 
