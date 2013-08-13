@@ -4178,9 +4178,6 @@ send_omni_inner(char remote_host[], unsigned int legacy_caller, char header_str[
              information of remote_res. */
           sockaddr_from_id(remote_port_id,&remote_addr);
 
-          /* Now, when we have the port id of netserver
-	     we can finally print out the test header.
-	     This routine is in nettest_tipc.c */
 	  if (print_headers)
 	    print_top_tipc_test_header(header_str,remote_port_id);
 
@@ -5604,7 +5601,7 @@ recv_omni()
 
   if (tipc_mode) {
     /* Netperf will need the port id of s_listen to be able to connect */
-    /* to netserver. This information is given by getsockname. */
+    /* to netserver. */
 
     get_portid(s_listen, &my_portid);
     omni_response->port_id = my_portid;

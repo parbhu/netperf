@@ -74,7 +74,6 @@ char	netperf_id[]="\
 #include "netsh.h"
 #include "netlib.h"
 #include "nettest_bsd.h"
-#include "nettest_tipc.h"
 
 #ifdef WANT_UNIX
 #include "nettest_unix.h"
@@ -286,12 +285,14 @@ main(int argc, char *argv[])
   }
 #endif
 #ifdef WANT_TIPC
+#ifdef WANT_MIGRATION
   else if (strcasecmp(test_name,"TIPC_STREAM") == 0) {
     send_tipc_stream(host_name);
   }
   else if (strcasecmp(test_name,"TIPC_RR") == 0) {
     send_tipc_rr(host_name);
   }
+#endif
 #endif
   else {
     printf("The test you requested (%s) is unknown to this netperf.\n"
