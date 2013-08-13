@@ -785,9 +785,11 @@ is_multicast_addr(struct addrinfo *res) {
     return IN6_IS_ADDR_MULTICAST(bar);
   }
 #endif
+#if defined(AF_TIPC)
   case AF_TIPC: {
     return 0; //Multicast not possible for tipc stream
   }
+#endif
   default:
     fprintf(where,
 	    "Unexpected Address Family for Multicast Check %u\n",
@@ -3611,9 +3613,11 @@ omni_create_data_socket(struct addrinfo *res)
 {
   SOCKET temp_socket;
 
+#if defined(AF_TIPC)
   if (res->ai_family == AF_TIPC)
     temp_socket = create_tipc_socket();
   else
+#endif
     temp_socket = create_data_socket(res);
 
   if (temp_socket != SOCKET_ERROR) {
