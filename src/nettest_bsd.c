@@ -421,6 +421,10 @@ nf_to_af(int nf) {
 #else
     return AF_UNSPEC;
 #endif
+#if defined(AF_TIPC)
+  case NF_TIPC:
+    return AF_TIPC;
+#endif
   default:
     return AF_UNSPEC;
   }
@@ -441,6 +445,10 @@ af_to_nf(int af) {
 #if defined(AF_RDS)
   case AF_RDS:
     return NF_RDS;
+#endif
+#if defined (AF_TIPC)
+  case AF_TIPC:
+    return NF_TIPC;
 #endif
   default:
     return NF_UNSPEC;

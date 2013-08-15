@@ -1261,6 +1261,9 @@ scan_cmd_line(int argc, char *argv[])
 	     (strcasecmp(test_name,"UDP_STREAM") == 0) ||
 	     (strcasecmp(test_name,"UDP_RR") == 0) ||
 #endif
+#ifdef WANT_TIPC
+	     (strcasecmp(test_name, "TIPC_STREAM") == 0) ||
+#endif
 	     (strcasecmp(test_name,"UUID") == 0)) {
       scan_omni_args(argc, argv);
     }

@@ -40,6 +40,8 @@ AC_HEADER_SYS_WAIT
 # lets keep this in some semblence of alphabetical order
 AC_CHECK_HEADERS([arpa/inet.h endian.h errno.h fcntl.h ifaddrs.h limits.h linux/tcp.h linux/socket.h malloc.h netdb.h netinet/in.h netinet/sctp.h sched.h signal.h stdlib.h string.h strings.h syscall.h sys/ioctl.h sys/mman.h sys/param.h sys/socket.h sys/stat.h sys/time.h sys/wait.h sys/ipc.h sys/sockio.h sys/sysinfo.h sys/wait.h stdlib.h unistd.h netinet/in_systm.h netinet/ip.h])
 
+AC_CHECK_HEADER(linux/tipc.h, [AC_DEFINE([WANT_TIPC], [], ["Build with TIPC tests"])],[])
+
 # Some platforms require these.  There may be a better way.
 AC_HAVE_LIBRARY(socket)
 if test "$ac_cv_lib_socket_main" = yes ; then

@@ -16,6 +16,12 @@
 # include "missing/getaddrinfo.h"
 #endif
 
+/* To avoid littering the code with more ifdefs than necessary,
+ * define AF_TIPC even if we're not building support for it*/
+#ifndef AF_TIPC
+#define AF_TIPC 30
+#endif
+
 #define PAD_TIME 4
 /* library routine specifc defines                                      */
 #define         MAXSPECDATA     162     /* how many ints worth of data  */

@@ -18,6 +18,7 @@
    we will have an NF_RDS as well and will make it "lucky 7" raj
    20091014 */
 #define NF_RDS    7
+#define NF_TIPC	  8
 
 /* it would also seem that the socket type defines differ from
    platform to platform, which means we need to define our own values
@@ -134,6 +135,8 @@ struct  omni_response_struct {
 				name that long - and still didn't
 				include the 9NNN model number! */
   char       security_string[16];
+  uint32_t   tipc_portid[2];	/* Node[0] and portid[1] of the tipc server,
+				   valid if 'ipfamily' is NF_TIPC */
 };
 
 struct omni_results_struct {

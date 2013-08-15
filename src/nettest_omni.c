@@ -136,6 +136,7 @@ char nettest_omni_id[]="\
 #include "netlib.h"
 #include "netsh.h"
 #include "nettest_bsd.h"
+#include "nettest_tipc.h"
 
 /* we only really use this once, but the initial patch to
    src/nettest_bsd.c used it in several places. keep it as a macro
@@ -317,6 +318,7 @@ double loc_cpu_confid_pct = -1.0;
 double rem_cpu_confid_pct = -1.0;
 double interval_pct = -1.0;
 
+int test_conn_af;
 int protocol;
 int direction;
 int remote_send_size = -1;
@@ -780,6 +782,10 @@ is_multicast_addr(struct addrinfo *res) {
     struct in6_addr *bar = &(((struct sockaddr_in6 *)res->ai_addr)->sin6_addr);
     return IN6_IS_ADDR_MULTICAST(bar);
   }
+#endif
+#if defined (AF_TIPC)
+	case AF_TIPC:
+		return 0;
 #endif
   default:
     fprintf(where,
@@ -3346,9 +3352,23 @@ disconnect_data_socket(SOCKET data_socket, int initiate, int do_close, struct so
      we assume a reliable connection and can do the usual graceful
      shutdown thing */
 
+#ifdef WANT_TIPC
+	if (test_conn_af == AF_TIPC) {
+		/* TIPC does not acknowledge connection shutdowns the same way TCP does,
+			 so we cannot do SHUT_WR+recv() here */
+		if (shutdown(data_socket,SHUT_RDWR) == SOCKET_ERROR && !times_up) {
+			fprintf(where, "netperf: cannot shutdown tipc stream socket: errno %d (%s)\n",
+							errno, strerror(errno));
+			fflush(where);
+			exit(1);
+		}
+	  if (do_close)
+	    close(data_socket);
+	  return 0;
+	}
+#endif
   /* this needs to be revisited for the netperf receiving case when
      the test is terminated by a Ctrl-C.  raj 2012-01-24 */
-
   if (protocol != IPPROTO_UDP) {
     if (initiate)
       shutdown(data_socket, SHUT_WR);
@@ -3593,7 +3613,12 @@ omni_create_data_socket(struct addrinfo *res)
 {
   SOCKET temp_socket;
 
-  temp_socket = create_data_socket(res);
+#ifdef WANT_TIPC
+	if (res->ai_family == AF_TIPC)
+					temp_socket = create_tipc_socket();
+	else
+#endif
+	  temp_socket = create_data_socket(res);
 
   if (temp_socket != SOCKET_ERROR) {
     if (local_cong_control_req[0] != '\0') {
@@ -3788,23 +3813,31 @@ send_omni_inner(char remote_host[], unsigned int legacy_caller, char header_str[
      control socket, and since we want to be able to use different
      protocols and such, we are passed the name of the remote host and
      must turn that into the test specific addressing information. */
+#ifdef WANT_TIPC
+	if (test_conn_af == AF_TIPC) {
+		get_tipc_addrinfo(&remote_res, &remote_addr);
+		get_tipc_addrinfo(&local_res, NULL);
+	}
+	else
+#endif
+	{
+	  complete_addrinfos(&remote_res,
+                       &local_res,
+                       remote_host,
+                       socket_type,
+                       protocol,
+                       0);
 
-  complete_addrinfos(&remote_res,
-		     &local_res,
-		     remote_host,
-		     socket_type,
-		     protocol,
-		     0);
-
-  if ( print_headers ) {
-    print_top_test_header(header_str,local_res,remote_res);
-  }
+	  if ( print_headers ) {
+			print_top_test_header(header_str,local_res,remote_res);
+	  }
+	}
 
   /* initialize a few counters */
 
   need_socket   = 1;
 
-  if (connection_test)
+  if (connection_test && test_conn_af != AF_TIPC)
     pick_next_port_number(local_res,remote_res);
 
 
@@ -4081,15 +4114,16 @@ send_omni_inner(char remote_host[], unsigned int legacy_caller, char header_str[
 	 tests will for the time being require that the user specify a
 	 local IP/name so we can extract them from the data_socket. */
       getsockname(data_socket, (struct sockaddr *)&my_addr, &my_addr_len);
-
-      ret = get_sockaddr_family_addr_port(&my_addr,
-					  nf_to_af(omni_request->ipfamily),
-					  omni_request->netperf_ip,
-					  &(omni_request->netperf_port));
-      ret = get_sockaddr_family_addr_port((struct sockaddr_storage *)remote_res->ai_addr,
-					  nf_to_af(omni_request->ipfamily),
-					  omni_request->netserver_ip,
-					  &(omni_request->data_port));
+			if (remote_res->ai_family != AF_TIPC) {
+	      ret = get_sockaddr_family_addr_port(&my_addr,
+						  nf_to_af(omni_request->ipfamily),
+						  omni_request->netperf_ip,
+						  &(omni_request->netperf_port));
+	      ret = get_sockaddr_family_addr_port((struct sockaddr_storage *)remote_res->ai_addr,
+						  nf_to_af(omni_request->ipfamily),
+						  omni_request->netserver_ip,
+						  &(omni_request->data_port));
+			}
       /* if the user didn't explicitly set the remote data address we
 	 don't want to pass along the one we picked implicitly, or a
 	 netserver sitting behind a (BLETCH) NAT will be asked to try
@@ -4131,11 +4165,27 @@ send_omni_inner(char remote_host[], unsigned int legacy_caller, char header_str[
 	remote_recv_width   = omni_response->recv_width;
 	remote_socket_prio  = omni_response->socket_prio;
 	remote_socket_tos   = omni_response->socket_tos;
+#ifdef WANT_TIPC
+	if (remote_res->ai_family == AF_TIPC) {
+		sockaddr_from_id(omni_response->tipc_portid[0],
+                     omni_response->tipc_portid[1],
+                     &remote_addr);
+		/* Now that we know of the complete TIPC addressing info of
+		 * the netserver instance, fill in remote res and print
+		 * out who we're talking to*/
+		if (print_headers)
+      print_top_tipc_test_header(header_str,
+											           omni_response->tipc_portid[0],
+																 omni_response->tipc_portid[1]);
 
-	/* make sure that port numbers are in network order because
-	   recv_response will have put everything into host order */
-	set_port_number(remote_res,
-			(unsigned short)omni_response->data_port);
+	} else
+#endif
+	{
+		/* make sure that port numbers are in network order because
+		   recv_response will have put everything into host order */
+		set_port_number(remote_res,
+				(unsigned short)omni_response->data_port);
+	}
 
 	if (debug) {
 	  fprintf(where,"remote listen done.\n");
@@ -4275,7 +4325,7 @@ send_omni_inner(char remote_host[], unsigned int legacy_caller, char header_str[
     again:
 
       if (need_socket) {
-	if (connection_test)
+	if (connection_test && remote_res->ai_family != AF_TIPC)
 
 	  pick_next_port_number(local_res,remote_res);
 
@@ -4308,7 +4358,7 @@ send_omni_inner(char remote_host[], unsigned int legacy_caller, char header_str[
 	  timed_out = 1;
 	  break;
 	}
-	else if ((ret == -2) && connection_test) {
+	else if ((ret == -2) && connection_test && remote_res->ai_family != AF_TIPC) {
 	  /* transient error  on a connection test means go around and
 	     try again with another local port number */
 	  if (debug) {
@@ -5297,6 +5347,13 @@ recv_omni()
   case AF_INET6:
     /* yes indeed it is, do nothing, bz */
     break;
+#ifdef WANT_TIPC
+	case AF_TIPC:
+		get_tipc_addrinfo(&local_res, &myaddr_in);
+		sockaddr_from_type_inst(NETSERVER_TIPC_TYPE, 0, &myaddr_in);
+		goto sock_create;
+		break;
+#endif
   case AF_INET:
   default:
     for (ret=0; ret < 4; ret++) {
@@ -5311,7 +5368,6 @@ recv_omni()
 			  port_buffer,
 			  nf_to_af(omni_request->ipfamily),
 			  omni_request->data_port);
-
   local_res = complete_addrinfo(local_name,
 				local_name,
 				port_buffer,
@@ -5319,7 +5375,9 @@ recv_omni()
 				nst_to_hst(omni_request->socket_type),
 				omni_request->protocol,
 				0);
-
+#ifdef WANT_TIPC
+sock_create:
+#endif
   s_listen = omni_create_data_socket(local_res);
 
   if (s_listen == INVALID_SOCKET) {
@@ -5523,6 +5581,12 @@ recv_omni()
     omni_response->cpu_rate =
       calibrate_local_cpu(omni_request->cpu_rate);
   }
+
+#ifdef WANT_TIPC
+	if (nf_to_af(omni_request->ipfamily) == AF_TIPC)
+					get_portid(s_listen, &omni_response->tipc_portid[0],
+										 &omni_response->tipc_portid[1]);
+#endif
 
   /* before we send the response back to the initiator, pull some of */
   /* the socket parms from the globals */
@@ -6931,6 +6995,139 @@ bytes   bytes    secs            #      #   %s/sec %% %c%c     us/KB\n\n";
     fflush(where);
   }
 }
+void
+send_tipc_stream(char remote_host[])
+{
+	char *tput_title = "\
+Recv   Send    Send                          \n\
+Socket Socket  Message  Elapsed              \n\
+Size   Size    Size     Time     Throughput  \n\
+bytes  bytes   bytes    secs.    %s/sec  \n\n";
+  char *tput_fmt_0 = "%7.2f %s\n";
+  char *tput_fmt_1 = "%6d %6d %6d    %-6.2f   %7.2f   %s\n";
+  char *cpu_title = "\
+Recv   Send    Send                          Utilization       Service Demand\n\
+Socket Socket  Message  Elapsed              Send     Recv     Send    Recv\n\
+Size   Size    Size     Time     Throughput  local    remote   local   remote\n\
+bytes  bytes   bytes    secs.    %-8.8s/s  %% %c      %% %c      us/KB   us/KB\n\n";
+	char *cpu_fmt_0 = "%6.3f %c %s\n";
+  char *cpu_fmt_1 =
+    "%6d %6d %6d    %-6.2f     %7.2f   %-6.2f   %-6.2f   %-6.3f  %-6.3f %s\n";
+	char *ksink_fmt = "\n\
+Alignment      Offset         %-8.8s %-8.8s    Sends   %-8.8s Recvs\n\
+Local  Remote  Local  Remote  Xfered   Per                 Per\n\
+Send   Recv    Send   Recv             Send (avg)          Recv (avg)\n\
+%5d   %5d  %5d   %5d %6"PRId64"  %6.2f    %6"PRId64"   %6.2f %6"PRId64"\n";
+
+	send_omni_inner(remote_host, legacy, "TIPC STREAM TEST");
+	if (legacy) {
+    /* We are now ready to print all the information, but only if we
+       are truly acting as a legacy test. If the user has specified
+       zero-level verbosity, we will just print the local service
+       demand, or the remote service demand. If the user has requested
+       verbosity level 1, he will get the basic "streamperf"
+       numbers. If the user has specified a verbosity of greater than
+       1, we will display a veritable plethora of background
+       information from outside of this block as it it not
+       cpu_measurement specific...  */
+		if (confidence < 0) {
+			/* we did not hit confidence, but were we asked to look for it? */
+			if (iteration_max > 1)
+				display_confidence();
+		}
+
+		if (local_cpu_usage || remote_cpu_usage) {
+			switch (verbosity) {
+			case 0:
+				if (local_cpu_usage) {
+					fprintf(where,
+									cpu_fmt_0,
+									local_service_demand,
+									local_cpu_method,
+									((print_headers) ||
+									 (result_brand == NULL)) ? "" : result_brand);
+				}
+				else {
+					fprintf(where,
+									cpu_fmt_0,
+									remote_service_demand,
+									remote_cpu_method,
+									((print_headers) ||
+									 (result_brand == NULL)) ? "" : result_brand);
+				}
+			break;
+			case 1:
+			case 2:
+				if (print_headers) {
+					fprintf(where,
+									cpu_title,
+									format_units(),
+									local_cpu_method,
+									remote_cpu_method);
+				}
+				fprintf(where,
+								cpu_fmt_1,              /* the format string */
+								rsr_size,               /* remote recvbuf size */
+								lss_size,               /* local sendbuf size */
+								send_size,              /* how large were the sends */
+								elapsed_time,           /* how long was the test */
+								thruput,                /* what was the xfer rate */
+								local_cpu_utilization,  /* local cpu */
+								remote_cpu_utilization, /* remote cpu */
+								local_service_demand,   /* local service demand */
+								remote_service_demand,  /* remote service demand */
+								((print_headers) ||
+								 (result_brand == NULL)) ? "" : result_brand);
+			break;
+			}
+    }
+		else {
+      /* The tester did not wish to measure service demand. */
+			switch (verbosity) {
+			case 0:
+				fprintf(where, tput_fmt_0, thruput, ((print_headers) ||
+								(result_brand == NULL)) ? "" : result_brand);
+			break;
+			case 1:
+			case 2:
+				if (print_headers)
+					fprintf(where,tput_title,format_units());
+					fprintf(where,
+									tput_fmt_1,             /* the format string */
+									rsr_size,               /* remote recvbuf size */
+									lss_size,               /* local sendbuf size */
+									send_size,              /* how large were the sends */
+									elapsed_time,           /* how long did it take */
+									thruput,                /* how fast did it go */
+									((print_headers) ||
+									 (result_brand == NULL)) ? "" : result_brand);
+			break;
+			}
+		}
+		if (verbosity > 1) {
+			fprintf(where,
+							ksink_fmt,
+							"Bytes",
+							"Bytes",
+							"Bytes",
+							local_send_align,
+							remote_recv_align,
+							local_send_offset,
+							remote_recv_offset,
+							bytes_sent,
+							bytes_sent / (double)local_send_calls,
+							local_send_calls,
+							bytes_sent / (double)remote_receive_calls,
+							remote_receive_calls);
+#ifdef WANT_HISTOGRAM
+			fprintf(where,"\n\nHistogram of time spent in send() call.\n");
+							HIST_report(time_hist);
+#endif /* WANT_HISTOGRAM */
+			fflush(where);
+		}
+	}
+}
+
 
 void
 send_udp_rr(char remote_host[])
@@ -7136,6 +7333,7 @@ set_omni_defaults_by_legacy_testname() {
   req_size = rsp_size = -1;
   was_legacy = 1;
   legacy = 1;
+	test_conn_af = AF_INET;
   implicit_direction = 0;  /* do we allow certain options to
 			      implicitly affect the test direction? */
   if (strcasecmp(test_name,"TCP_STREAM") == 0) {
@@ -7173,6 +7371,13 @@ set_omni_defaults_by_legacy_testname() {
     req_size = rsp_size = 1;
     connection_test = 1;
   }
+#ifdef WANT_TIPC
+	else if (strcasecmp(test_name, "TIPC_STREAM") ==  0) {
+					protocol = 0;
+					direction = NETPERF_XMIT;
+					test_conn_af = AF_TIPC;
+	}
+#endif
   else if (strcasecmp(test_name,"omni") == 0) {
     /* there is not much to do here but clear the legacy flag */
     was_legacy = 0;
