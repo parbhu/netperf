@@ -215,3 +215,7 @@ extern int
 extern int parse_ipqos(const char *cp);
 extern const char * iptos2str(int iptos);
 
+/* Number of parallel tests */
+extern int num_parallel_tests;
+extern int child2; 
+extern int client_pipe;

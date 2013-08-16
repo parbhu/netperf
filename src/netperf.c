@@ -105,6 +105,175 @@ char	netperf_id[]="\
  /* this file contains the main for the netperf program. all the other
     routines can be found in the file netsh.c */
 
+#include <sys/queue.h>
+#ifndef WIN32
+#include <errno.h>
+#endif
+#define BUFSZ 64
+
+struct client {
+        int pfds[2];
+        pid_t pid;
+        LIST_ENTRY(client) next;
+};
+
+LIST_HEAD(client_head, client) client_list = LIST_HEAD_INITIALIZER(client_list);
+
+int child2 = 0;
+int client_pipe = -1;
+
+int
+initialize_parallel_tests()
+{
+  int i;
+  struct client *cli;
+
+  for (i = 0; i < num_parallel_tests; i++) {
+    cli = malloc(sizeof(struct client));
+
+    if(pipe(cli->pfds))
+      perror("pipe");
+
+    if ((cli->pid = fork())) { /*If we are parent*/
+      close(cli->pfds[1]);    /* Parent will not write on pipe */
+      LIST_INSERT_HEAD(&client_list, cli, next);
+      fprintf(where, "Starting parallel test process with pid %d\n", cli->pid);
+    }
+    else {
+      close(cli->pfds[0]);    /* Child will not read pipe */
+      client_pipe = cli->pfds[1];
+      child2 = 1;
+      return 0;
+    }
+  }
+  return 1;
+}
+
+double
+sum(double array[]) {
+  int i;
+  double sum = 0;
+
+  for (i=0; i<num_parallel_tests; i++) {
+    sum += array[i];	
+  }
+  return sum;
+}
+
+char test_header[] = "\n\
+------------------------------------\n\
+   OUTPUT for test with pid %d\n\
+------------------------------------\n\
+\n";
+
+char results_header[] = "\n\n\
+------------------------------------\n\
+   Combined results\n\
+------------------------------------\n\
+\n";
+
+void 
+get_results() 
+{
+  int i, char_read, status, clientsleft = num_parallel_tests;
+  pid_t childpid;
+  struct client *cli;
+  char rbuf[BUFSZ];
+  double bytes_sent[num_parallel_tests];
+  float elapsed_time[num_parallel_tests];
+  double nr_transactions[num_parallel_tests];
+  double request_size[num_parallel_tests];
+  double response_size[num_parallel_tests];
+
+  while(clientsleft) {
+    childpid = wait(&status);
+    LIST_FOREACH(cli, &client_list, next) {
+
+      if (cli->pid == childpid) {
+        memset(&rbuf,0,BUFSZ);
+
+       /* Receive number of sent bytes */
+       char_read = read(cli->pfds[0], &bytes_sent[clientsleft-1], sizeof(double));
+       if (char_read != sizeof(double)) {
+         fprintf(where,"%s: read from pipe error: %s (errno %d)\n",
+                  __FUNCTION__, strerror(errno), errno);  
+       }
+
+       /* Receive elapsed time */
+       char_read = read(cli->pfds[0], &elapsed_time[clientsleft-1], sizeof(float));
+       if (char_read != sizeof(float)) {
+         fprintf(where,"%s: read from pipe error: %s (errno %d)\n",
+                  __FUNCTION__, strerror(errno), errno); 
+       }
+
+       /* Receive transaction rate */
+       char_read = read(cli->pfds[0], &nr_transactions[clientsleft-1], sizeof(double));
+       if (char_read != sizeof(double)) {
+         fprintf(where,"%s: read from pipe error: %s (errno %d)\n",
+                  __FUNCTION__, strerror(errno), errno);
+       }
+
+       /* Receive request size */
+       char_read = read(cli->pfds[0], &request_size[clientsleft-1], sizeof(double));
+       if (char_read != sizeof(double)) {
+         fprintf(where,"%s: read from pipe error: %s (errno %d)\n",
+                  __FUNCTION__, strerror(errno), errno);
+       }
+
+       /* Receive response size */
+       char_read = read(cli->pfds[0], &response_size[clientsleft-1], sizeof(double));
+       if (char_read != sizeof(double)) {
+         fprintf(where,"%s: read from pipe error: %s (errno %d)\n",
+                  __FUNCTION__, strerror(errno), errno);
+       }
+
+       /* Receive test specific output for child */
+       fprintf(where, test_header, cli->pid);
+        while ((char_read = read(cli->pfds[0], &rbuf, BUFSZ)) >0) {
+          write(1, &rbuf, char_read);
+        }
+        if (char_read == -1) {
+          fprintf(where,"%s: read from pipe error: %s (errno %d)\n",
+                  __FUNCTION__, strerror(errno), errno);
+        }
+
+        LIST_REMOVE(cli, next);
+        free(cli);
+        break;
+      }
+    }
+    clientsleft--;
+  }
+ 
+  fprintf(where, "%s", results_header);
+  for(i=(num_parallel_tests-1); i>=0; i--){
+    fprintf(where, "bytes sent: %f\n", bytes_sent[i]);
+    fprintf(where, "elapsed time: %f\n", elapsed_time[i]);
+    fprintf(where, "nr of transactions: %f\n", nr_transactions[i]);
+    fprintf(where, "req_size: %f\n", request_size[i]);
+    fprintf(where, "rsp_size: %f\n", response_size[i]);
+    fprintf(where, "\n");
+    /* Throughput will be wrong for RR tests..
+       TO-DO: if _RR test; use calc_thruput_interval_omni instead
+       of calc_thruput_interval */
+    fprintf(where, "thruput: %f\n", 
+	calc_thruput_interval(bytes_sent[i], elapsed_time[i]));
+    fprintf(where, "Transaction rate: %f trans. per sec.\n", 
+	calc_thruput_interval(nr_transactions[i], elapsed_time[i]));
+    fprintf(where, "\n------------------------------------\n");
+  }  
+
+  if (!LIST_EMPTY(&client_list)) {
+    printf("This should never happen\n");
+    exit(-1);
+  }
+
+  /* Calculate result */
+  //fprintf(where, results_header);
+  //fprintf(where, <type>, sum, <format>);
+  return;
+}
+
 
 int _cdecl
 main(int argc, char *argv[])
@@ -124,6 +293,11 @@ main(int argc, char *argv[])
   /* the call to set_defaults() is gone because we can initialize in
      declarations (or is that definitions) unlike the old days */
   scan_cmd_line(argc,argv);
+
+  if (num_parallel_tests > 1) {
+    if (initialize_parallel_tests())
+      goto w4results;
+  }
 
   if (debug) {
     dump_globals();
@@ -298,6 +472,12 @@ main(int argc, char *argv[])
 	   "and that test family has been compiled into this netperf.\n",
 	   test_name);
     exit(1);
+  }
+
+w4results:
+  if (num_parallel_tests>1 && !child2) {
+    get_results();
+    exit(0);
   }
 
   if (!no_control) {

@@ -493,6 +493,9 @@ extern int
   local_connected,
   remote_connected;
 
+int client_pipe;
+int child2;
+
 enum netperf_output_type {
   NETPERF_TYPE_UNKNOWN,
   NETPERF_TYPE_UINT32,
@@ -4376,6 +4379,7 @@ send_omni_inner(char remote_host[], unsigned int legacy_caller, char header_str[
 	  /* either this was a hard failure (-3) or a soft failure on
 	     something other than a connection test */
 	  perror("netperf: send_omni: connect_data_socket failed");
+	  printf("Failing pid: %d\n", getpid());
 	  exit(1);
 	}
       }
@@ -6136,8 +6140,7 @@ Size (bytes)\n\
 
   send_omni_inner(remote_host, legacy, "MIGRATED TCP STREAM TEST");
 
-
-  if (legacy) {
+  if (legacy) {  
 
     /* We are now ready to print all the information, but only if we
        are truly acting as a legacy test. If the user has specified
@@ -6148,6 +6151,25 @@ Size (bytes)\n\
        1, we will display a veritable plethora of background
        information from outside of this block as it it not
        cpu_measurement specific...  */
+
+    if (child2) {//Send test parameters to parent
+
+      double nr_bytes = (double) bytes_sent;
+      double nr_transactions = (double)trans_completed;
+      double request_size = (double)req_size;
+      double response_size = (double)rsp_size;
+
+      write(client_pipe, &nr_bytes, sizeof(double));
+      write(client_pipe, &elapsed_time, sizeof(float));
+      write(client_pipe, &nr_transactions, sizeof(double));
+
+      write(client_pipe, &request_size, sizeof(double));
+      write(client_pipe, &response_size, sizeof(double));
+
+      /*write(client_pipe, &remote_bytes_xferd, sizeof(double));
+      write(client_pipe, &elapsed_time, sizeof(float));
+      write(client_pipe, &transaction_rate, sizeof(double));*/
+    }
 
     if (confidence < 0) {
       /* we did not hit confidence, but were we asked to look for it? */
@@ -6161,7 +6183,7 @@ Size (bytes)\n\
       switch (verbosity) {
       case 0:
 	if (local_cpu_usage) {
-	  fprintf(where,
+	  va_printf(client_pipe,
 		  cpu_fmt_0,
 		  local_service_demand,
 		  local_cpu_method,
@@ -6169,7 +6191,7 @@ Size (bytes)\n\
 		   (result_brand == NULL)) ? "" : result_brand);
 	}
 	else {
-	  fprintf(where,
+	  va_printf(client_pipe,
 		  cpu_fmt_0,
 		  remote_service_demand,
 		  remote_cpu_method,
@@ -6180,14 +6202,14 @@ Size (bytes)\n\
       case 1:
       case 2:
 	if (print_headers) {
-	  fprintf(where,
+	  va_printf(client_pipe,
 		  cpu_title,
 		  format_units(),
 		  local_cpu_method,
 		  remote_cpu_method);
 	}
 
-	fprintf(where,
+	va_printf(client_pipe,
 		cpu_fmt_1,		/* the format string */
 		rsr_size,		/* remote recvbuf size */
 		lss_size,		/* local sendbuf size */
@@ -6208,7 +6230,7 @@ Size (bytes)\n\
 
       switch (verbosity) {
       case 0:
-	fprintf(where,
+	va_printf(client_pipe,
 		tput_fmt_0,
 		thruput,
 		((print_headers) ||
@@ -6217,9 +6239,9 @@ Size (bytes)\n\
       case 1:
       case 2:
 	if (print_headers) {
-	  fprintf(where,tput_title,format_units());
+	  va_printf(client_pipe,tput_title,format_units());
 	}
-	fprintf(where,
+	va_printf(client_pipe,
 		tput_fmt_1,		/* the format string */
 		rsr_size, 		/* remote recvbuf size */
 		lss_size, 		/* local sendbuf size */
@@ -6247,7 +6269,7 @@ Size (bytes)\n\
       /* this stuff needs to be worked-out in the presence of confidence */
       /* intervals and multiple iterations of the test... raj 11/94 */
 
-      fprintf(where,
+      va_printf(client_pipe,
 	      ksink_fmt,
 	      "Bytes",
 	      "Bytes",
@@ -6261,23 +6283,22 @@ Size (bytes)\n\
 	      local_send_calls,
 	      bytes_sent / (double)remote_receive_calls,
 	      remote_receive_calls);
-      fprintf(where,
+      va_printf(client_pipe,
 	      ksink_fmt2,
 	      transport_mss);
 #ifdef WANT_HISTOGRAM
-      fprintf(where,"\n\nHistogram of time spent in send() call.\n");
+      va_printf(client_pipe,"\n\nHistogram of time spent in send() call.\n");
       HIST_report(time_hist);
 #endif /* WANT_HISTOGRAM */
       fflush(where);
     }
-
   }
 }
+
 
 void
 send_tcp_maerts(char remote_host[])
 {
-
   char *tput_title = "\
 Recv   Send    Send                          \n\
 Socket Socket  Message  Elapsed              \n\
@@ -6523,6 +6544,21 @@ Send   Recv    Send   Recv    usec/Tran  per sec  Outbound   Inbound\n\
        from outside of this block as it it not cpu_measurement
        specific...  */
 
+    if (child2) {//Send test parameters to parent
+
+      double nr_bytes = (double) bytes_sent;
+      double nr_transactions = (double)trans_completed;
+      double request_size = (double)req_size;
+      double response_size = (double)rsp_size;
+
+      write(client_pipe, &nr_bytes, sizeof(double));
+      write(client_pipe, &elapsed_time, sizeof(float));
+      write(client_pipe, &nr_transactions, sizeof(double));
+
+      write(client_pipe, &request_size, sizeof(double));
+      write(client_pipe, &response_size, sizeof(double));
+    }
+
     if (confidence < 0) {
       /* we did not hit confidence, but were we asked to look for it? */
       if (iteration_max > 1) {
@@ -6535,7 +6571,7 @@ Send   Recv    Send   Recv    usec/Tran  per sec  Outbound   Inbound\n\
       switch (verbosity) {
       case 0:
 	if (local_cpu_usage) {
-	  fprintf(where,
+	  va_printf(client_pipe,
 		  cpu_fmt_0,
 		  local_service_demand,
 		  local_cpu_method,
@@ -6543,7 +6579,7 @@ Send   Recv    Send   Recv    usec/Tran  per sec  Outbound   Inbound\n\
 		   (result_brand == NULL)) ? "" : result_brand);
 	}
 	else {
-	  fprintf(where,
+	  va_printf(client_pipe,
 		  cpu_fmt_0,
 		  remote_service_demand,
 		  remote_cpu_method,
@@ -6555,13 +6591,13 @@ Send   Recv    Send   Recv    usec/Tran  per sec  Outbound   Inbound\n\
       case 2:
 	if (print_headers) {
 	  if ('x' == libfmt) {
-	    fprintf(where,
+	    va_printf(client_pipe,
 		    cpu_title,
 		    local_cpu_method,
 		    remote_cpu_method);
 	  }
 	  else {
-	    fprintf(where,
+	    va_printf(client_pipe,
 		    cpu_title_tput,
 		    format_units(),
 		    local_cpu_method,
@@ -6569,7 +6605,7 @@ Send   Recv    Send   Recv    usec/Tran  per sec  Outbound   Inbound\n\
 	  }
 	}
 
-	fprintf(where,
+	va_printf(client_pipe,
 		cpu_fmt_1_line_1,		/* the format string */
 		lss_size,		/* local sendbuf size */
 		lsr_size,
@@ -6583,7 +6619,7 @@ Send   Recv    Send   Recv    usec/Tran  per sec  Outbound   Inbound\n\
 		remote_service_demand,	/* remote service demand */
 		((print_headers) ||
 		 (result_brand == NULL)) ? "" : result_brand);
-	fprintf(where,
+	va_printf(client_pipe,
 		cpu_fmt_1_line_2,
 		rss_size,
 		rsr_size);
@@ -6595,7 +6631,7 @@ Send   Recv    Send   Recv    usec/Tran  per sec  Outbound   Inbound\n\
 
       switch (verbosity) {
       case 0:
-	fprintf(where,
+	va_printf(client_pipe,
 		tput_fmt_0,
 		thruput,
 		((print_headers) ||
@@ -6604,12 +6640,12 @@ Send   Recv    Send   Recv    usec/Tran  per sec  Outbound   Inbound\n\
       case 1:
       case 2:
 	if (print_headers) {
-	  fprintf(where,
+	  va_printf(client_pipe,
 		  ('x' == libfmt) ? tput_title : tput_title_band,
 		  format_units());
 	}
 
-	fprintf(where,
+	va_printf(client_pipe,
 		tput_fmt_1_line_1,	/* the format string */
 		lss_size,
 		lsr_size,
@@ -6627,7 +6663,7 @@ Send   Recv    Send   Recv    usec/Tran  per sec  Outbound   Inbound\n\
 		thruput,
 		((print_headers) ||
 		 (result_brand == NULL)) ? "" : result_brand);
-	fprintf(where,
+	va_printf(client_pipe,
 		tput_fmt_1_line_2,
 		rss_size, 		/* remote recvbuf size */
 		rsr_size);
@@ -6661,7 +6697,7 @@ Send   Recv    Send   Recv    usec/Tran  per sec  Outbound   Inbound\n\
 	libfmt = 'm';
       }
 
-      fprintf(where,
+      va_printf(client_pipe,
 	      ksink_fmt,
 	      format_units(),
 	      local_send_align,
@@ -6682,7 +6718,7 @@ Send   Recv    Send   Recv    usec/Tran  per sec  Outbound   Inbound\n\
 					 1.0));
 
 #ifdef WANT_HISTOGRAM
-      fprintf(where,"\nHistogram of request/response times\n");
+      va_printf(client_pipe,"\nHistogram of request/response times\n");
       HIST_report(time_hist);
 #endif /* WANT_HISTOGRAM */
       fflush(where);

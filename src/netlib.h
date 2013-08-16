@@ -241,6 +241,10 @@
 # endif
 #endif
 
+/* This is used to write to pipes instead of stdout in case of a 
+   test running mulitple parallel tests.  */
+#define va_printf(dst, format, ...) (child2 ? dprintf(dst, format, __VA_ARGS__) : fprintf(where, format, __VA_ARGS__))
+
 enum sock_buffer{
   SEND_BUFFER,
   RECV_BUFFER

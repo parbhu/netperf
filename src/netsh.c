@@ -50,6 +50,9 @@ extern	int	getopt(int , char **, char *) ;
 #include <strings.h>
 #endif /* STRINGS */
 
+#include <sys/queue.h>
+#define BUFSZ 64
+
 /**********************************************************************/
 /*                                                                    */
 /*          Local Include Files                                       */
@@ -87,7 +90,7 @@ extern	int	getopt(int , char **, char *) ;
    getopt to parse the command line, we will tell getopt that they do
    not take parms, and then look for them ourselves */
 
-#define GLOBAL_CMD_LINE_ARGS "A:a:b:B:CcdD:f:F:H:hi:I:jk:K:l:L:n:NO:o:P:p:RrSs:t:T:v:VW:w:y:Y:Z:46"
+#define GLOBAL_CMD_LINE_ARGS "A:a:b:B:CcdD:f:F:H:hi:I:jk:K:l:L:n:NO:o:P:p:RrSs:t:T:u:v:VW:w:y:Y:Z:46"
 
 /************************************************************************/
 /*									*/
@@ -223,6 +226,9 @@ int no_control = 0;
 /* what is the passphrase? */
 char *passphrase = NULL;
 
+/* Number of parallel tests. */
+int num_parallel_tests = 1;
+
 char netserver_usage[] = "\n\
 Usage: netserver [options] \n\
 \n\
@@ -280,6 +286,7 @@ Global options:\n\
     -S                Set SO_KEEPALIVE on the data connection\n\
     -t testname       Specify test to perform\n\
     -T lcpu,rcpu      Request netperf/netserver be bound to local/remote cpu\n\
+    -u numtests       Specify number of parallel tests\n\
     -v verbosity      Specify the verbosity level\n\
     -W send,recv      Set the number of send,recv buffers\n\
     -v level          Set the verbosity level (default 1, min 0)\n\
@@ -1048,6 +1055,9 @@ scan_cmd_line(int argc, char *argv[])
     case 'V':
       printf("Netperf version %s\n",NETPERF_VERSION);
       exit(0);
+      break;
+    case 'u':
+      num_parallel_tests = atoi(optarg);
       break;
     };
   }
