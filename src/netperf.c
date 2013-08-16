@@ -287,6 +287,9 @@ main(int argc, char *argv[])
   else if (strcasecmp(test_name, "TIPC_STREAM") == 0) {
 	  send_tipc_stream(host_name);
   }
+  else if (strcasecmp(test_name, "TIPC_RR" ) == 0) {
+	  send_tipc_rr(host_name);
+  }
 #endif
 #endif
   else {

@@ -5,6 +5,7 @@
 
 /* Used by netperf.c */
 void send_tipc_stream(char remote_host[]);
+void send_tipc_rr(char remote_host[]);
 
 /* Used by nettest_omni.c */
 void print_top_tipc_test_header(char test_name[], uint32_t node, uint32_t ref);
