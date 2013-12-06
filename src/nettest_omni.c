@@ -7595,6 +7595,7 @@ set_omni_defaults_by_legacy_testname() {
 					protocol = 0;
 					req_size = rsp_size = 1;
 					direction = NETPERF_XMIT | NETPERF_RECV;
+					test_conn_af = AF_TIPC;
 	}
 #endif
   else if (strcasecmp(test_name,"omni") == 0) {
