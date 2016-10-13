@@ -155,6 +155,7 @@ char nettest_omni_id[]="\
 #include "hist.h"
 
 static HIST time_hist;
+int non_blocking = 0;
 
 
 
@@ -2898,91 +2899,119 @@ int send_pktinfo(SOCKET data_socket, char *buffer, int len, struct sockaddr *des
 int
 send_data(SOCKET data_socket, struct ring_elt *send_ring, uint32_t bytes_to_send, struct sockaddr *destination, int destlen, int protocol) {
 
-  int len;
+	int len;
 
-  /* if the user has supplied a destination, we use sendto, otherwise
-     we use send.  we ass-u-me blocking operations always, so no need
-     to check for eagain or the like. */
+	/* if the user has supplied a destination, we use sendto, otherwise
+	   we use send.  we ass-u-me blocking operations always, so no need
+	   to check for eagain or the like. */
 
-  if (debug > 2) {
-    fprintf(where,
-	    "%s sock %d, ring elt %p, bytes %d, dest %p, len %d\n",
-	    __FUNCTION__,
-	    data_socket,
-	    send_ring,
-	    bytes_to_send,
-	    destination,
-	    destlen);
-    fflush(where);
-  }
+	if (debug > 2) {
+		fprintf(where,
+			"%s sock %d, ring elt %p, bytes %d, dest %p, len %d\n",
+			__FUNCTION__,
+			data_socket,
+			send_ring,
+			bytes_to_send,
+			destination,
+			destlen);
+		fflush(where);
+	}
 
-  if (destination) {
-    if (have_pktinfo) {
-      len = send_pktinfo(data_socket,
-			 send_ring->buffer_ptr,
-			 bytes_to_send,
-			 destination,
-			 destlen);
-    }
-    else {
-      len = sendto(data_socket,
-		   send_ring->buffer_ptr,
-		   bytes_to_send,
+	if (destination) {
+		if (have_pktinfo) {
+			len = send_pktinfo(data_socket,
+					   send_ring->buffer_ptr,
+					   bytes_to_send,
+					   destination,
+					   destlen);
+		}
+		else {
+			len = sendto(data_socket,
+				     send_ring->buffer_ptr,
+				     bytes_to_send,
 #if defined(MSG_FASTOPEN)
-		   (use_fastopen && protocol == IPPROTO_TCP) ? MSG_FASTOPEN : 0,
+				     (use_fastopen && protocol == IPPROTO_TCP) ? MSG_FASTOPEN : 0,
 #else
-		   0,
+				     non_blocking ? MSG_DONTWAIT : 0,
 #endif
-		   destination,
-		   destlen);
-    }
-  }
-  else {
-    if (!use_write) {
-      len = send(data_socket,
-		 send_ring->buffer_ptr,
-		 bytes_to_send,
-		 0);
-    }
-    else {
+				     destination,
+				     destlen);
+		}
+	}
+	else {
+		if (!use_write) {
+			if (non_blocking) {
+				int sent_bytes = 0;
+				do {
+					len = send(data_socket,
+						   send_ring->buffer_ptr + sent_bytes,
+						   bytes_to_send - sent_bytes,
+						   MSG_DONTWAIT);
+					if (len > 0) {
+						sent_bytes += len;
+						continue;
+					}
+					if (errno == EAGAIN || errno == EWOULDBLOCK) {
+						failed_sends++;
+						continue;
+					}
+					if (SOCKET_EINTR(len))
+						return -1;
+					if (errno == ENOBUFS)
+						return -2;
+					if (errno) {
+						fprintf(where,"%s: fails:%d len:%d bytes_to_send:%d data send error: %s (errno %d)\n",
+							__func__, failed_sends, len, bytes_to_send, strerror(errno), errno);
+						return -3;
+					}
+				} while (sent_bytes != bytes_to_send);
+				return bytes_to_send;
+			} else {
+				len = send(data_socket,
+					   send_ring->buffer_ptr,
+					   bytes_to_send,
+					   0);
+			}
+		}
+		else {
 #ifndef WIN32
-      len = write(data_socket,
-		  send_ring->buffer_ptr,
-		  bytes_to_send);
+			len = write(data_socket,
+				    send_ring->buffer_ptr,
+				    bytes_to_send);
 #else
-      fprintf(where,"I'm sorry Dave I cannot write() under Windows\n");
-      fflush(where);
-      return -3;
+			fprintf(where,"I'm sorry Dave I cannot write() under Windows\n");
+			fflush(where);
+			return -3;
 #endif
-    }
-  }
-  if(len != bytes_to_send) {
-    /* don't forget that some platforms may do a partial send upon
-       receipt of the interrupt and not return an EINTR... */
-    if (SOCKET_EINTR(len) || (len >= 0))
-      {
-	/* we hit the end of a  timed test. */
-	return -1;
-      }
-    /* if this is UDP it is possible to receive an ENOBUFS on the send
-       call and it would not be a fatal error.  of course if we were
-       to return 0 then it would make the test think it was over when
-       it really wasn't.  the question becomes what to do.  for the
-       time being, the answer will likely be to return something like
-       -2 to indicate a non-fatal error happened on the send and let
-       the caller figure it out :) we won't actually check to see if
-       this is UDP - it is the author's experience in many, Many, MANY
-       years that the only time an ENOBUFS has been returned in a
-       netperf test has been with UDP.  famous last words :) */
-    if (errno == ENOBUFS)
-      return -2;
-    else {
-      fprintf(where,"%s: data send error: %s (errno %d)\n",
-	      __FUNCTION__, strerror(errno), errno);
-      return -3;
-    }
-  }
-  return len;
+		}
+	}
+	if(len != bytes_to_send) {
+		/* don't forget that some platforms may do a partial send upon
+		   receipt of the interrupt and not return an EINTR... */
+		if (SOCKET_EINTR(len) || (len >= 0))
+		{
+			/* we hit the end of a  timed test. */
+			return -1;
+		}
+		/* if this is UDP it is possible to receive an ENOBUFS on the send
+		   call and it would not be a fatal error.  of course if we were
+		   to return 0 then it would make the test think it was over when
+		   it really wasn't.  the question becomes what to do.  for the
+		   time being, the answer will likely be to return something like
+		   -2 to indicate a non-fatal error happened on the send and let
+		   the caller figure it out :) we won't actually check to see if
+		   this is UDP - it is the author's experience in many, Many, MANY
+		   years that the only time an ENOBUFS has been returned in a
+		   netperf test has been with UDP.  famous last words :) */
+		if (errno == ENOBUFS) {
+			return -2;
+		} else {
+			fprintf(where,"%s: data send error: %s (errno %d)\n",
+				__FUNCTION__, strerror(errno), errno);
+			return -3;
+		}
+	}
+	return len;
 }
 
 #if defined(__linux)
@@ -7000,19 +7029,19 @@ send_tipc_stream(char remote_host[])
 {
 	char *tput_title = "\
 Recv   Send    Send                          \n\
-Socket Socket  Message  Elapsed              \n\
-Size   Size    Size     Time     Throughput  \n\
-bytes  bytes   bytes    secs.    %s/sec  \n\n";
+Socket Socket  Message  Elapsed  Send                \n\
+Size   Size    Size     Time     Failures Throughput  \n\
+bytes  bytes   bytes    secs.             %s/sec  \n\n";
   char *tput_fmt_0 = "%7.2f %s\n";
-  char *tput_fmt_1 = "%6d %6d %6d    %-6.2f   %7.2f   %s\n";
+  char *tput_fmt_1 = "%6d %6d %6d    %-6.2f %6u   %7.2f   %s\n";
   char *cpu_title = "\
-Recv   Send    Send                          Utilization       Service Demand\n\
-Socket Socket  Message  Elapsed              Send     Recv     Send    Recv\n\
-Size   Size    Size     Time     Throughput  local    remote   local   remote\n\
-bytes  bytes   bytes    secs.    %-8.8s/s  %% %c      %% %c      us/KB   us/KB\n\n";
+Recv   Send    Send                                   Utilization       Service Demand\n\
+Socket Socket  Message  Elapsed  Send                 Send     Recv     Send    Recv\n\
+Size   Size    Size     Time     Failures Throughput  local    remote   local   remote\n\
+bytes  bytes   bytes    secs.              %-8.8s/s  %% %c      %% %c   us/KB   us/KB\n\n";
 	char *cpu_fmt_0 = "%6.3f %c %s\n";
   char *cpu_fmt_1 =
-    "%6d %6d %6d    %-6.2f     %7.2f   %-6.2f   %-6.2f   %-6.3f  %-6.3f %s\n";
+    "%6d %6d %6d    %-6.2f %6u    %7.2f   %-6.2f   %-6.2f   %-6.3f  %-6.3f %s\n";
 	char *ksink_fmt = "\n\
 Alignment      Offset         %-8.8s %-8.8s    Sends   %-8.8s Recvs\n\
 Local  Remote  Local  Remote  Xfered   Per                 Per\n\
@@ -7021,15 +7050,15 @@ Send   Recv    Send   Recv             Send (avg)          Recv (avg)\n\
 
 	send_omni_inner(remote_host, legacy, "TIPC STREAM TEST");
 	if (legacy) {
-    /* We are now ready to print all the information, but only if we
-       are truly acting as a legacy test. If the user has specified
-       zero-level verbosity, we will just print the local service
-       demand, or the remote service demand. If the user has requested
-       verbosity level 1, he will get the basic "streamperf"
-       numbers. If the user has specified a verbosity of greater than
-       1, we will display a veritable plethora of background
-       information from outside of this block as it it not
-       cpu_measurement specific...  */
+		/* We are now ready to print all the information, but only if we
+		   are truly acting as a legacy test. If the user has specified
+		   zero-level verbosity, we will just print the local service
+		   demand, or the remote service demand. If the user has requested
+		   verbosity level 1, he will get the basic "streamperf"
+		   numbers. If the user has specified a verbosity of greater than
+		   1, we will display a veritable plethora of background
+		   information from outside of this block as it it not
+		   cpu_measurement specific...  */
 		if (confidence < 0) {
 			/* we did not hit confidence, but were we asked to look for it? */
 			if (iteration_max > 1)
@@ -7041,87 +7070,89 @@ Send   Recv    Send   Recv             Send (avg)          Recv (avg)\n\
 			case 0:
 				if (local_cpu_usage) {
 					fprintf(where,
-									cpu_fmt_0,
-									local_service_demand,
-									local_cpu_method,
-									((print_headers) ||
-									 (result_brand == NULL)) ? "" : result_brand);
+						cpu_fmt_0,
+						local_service_demand,
+						local_cpu_method,
+						((print_headers) ||
+						 (result_brand == NULL)) ? "" : result_brand);
 				}
 				else {
 					fprintf(where,
-									cpu_fmt_0,
-									remote_service_demand,
-									remote_cpu_method,
-									((print_headers) ||
-									 (result_brand == NULL)) ? "" : result_brand);
+						cpu_fmt_0,
+						remote_service_demand,
+						remote_cpu_method,
+						((print_headers) ||
+						 (result_brand == NULL)) ? "" : result_brand);
 				}
-			break;
+				break;
 			case 1:
 			case 2:
 				if (print_headers) {
 					fprintf(where,
-									cpu_title,
-									format_units(),
-									local_cpu_method,
-									remote_cpu_method);
+						cpu_title,
+						format_units(),
+						local_cpu_method,
+						remote_cpu_method);
 				}
 				fprintf(where,
-								cpu_fmt_1,              /* the format string */
-								rsr_size,               /* remote recvbuf size */
-								lss_size,               /* local sendbuf size */
-								send_size,              /* how large were the sends */
-								elapsed_time,           /* how long was the test */
-								thruput,                /* what was the xfer rate */
-								local_cpu_utilization,  /* local cpu */
-								remote_cpu_utilization, /* remote cpu */
-								local_service_demand,   /* local service demand */
-								remote_service_demand,  /* remote service demand */
-								((print_headers) ||
-								 (result_brand == NULL)) ? "" : result_brand);
-			break;
+					cpu_fmt_1,              /* the format string */
+					rsr_size,               /* remote recvbuf size */
+					lss_size,               /* local sendbuf size */
+					send_size,              /* how large were the sends */
+					elapsed_time,           /* how long was the test */
+					failed_sends,
+					thruput,                /* what was the xfer rate */
+					local_cpu_utilization,  /* local cpu */
+					remote_cpu_utilization, /* remote cpu */
+					local_service_demand,   /* local service demand */
+					remote_service_demand,  /* remote service demand */
+					((print_headers) ||
+					 (result_brand == NULL)) ? "" : result_brand);
+				break;
 			}
-    }
+		}
 		else {
-      /* The tester did not wish to measure service demand. */
+			/* The tester did not wish to measure service demand. */
 			switch (verbosity) {
 			case 0:
 				fprintf(where, tput_fmt_0, thruput, ((print_headers) ||
-								(result_brand == NULL)) ? "" : result_brand);
-			break;
+								     (result_brand == NULL)) ? "" : result_brand);
+				break;
 			case 1:
 			case 2:
 				if (print_headers)
 					fprintf(where,tput_title,format_units());
-					fprintf(where,
-									tput_fmt_1,             /* the format string */
-									rsr_size,               /* remote recvbuf size */
-									lss_size,               /* local sendbuf size */
-									send_size,              /* how large were the sends */
-									elapsed_time,           /* how long did it take */
-									thruput,                /* how fast did it go */
-									((print_headers) ||
-									 (result_brand == NULL)) ? "" : result_brand);
-			break;
+				fprintf(where,
+					tput_fmt_1,             /* the format string */
+					rsr_size,               /* remote recvbuf size */
+					lss_size,               /* local sendbuf size */
+					send_size,              /* how large were the sends */
+					elapsed_time,           /* how long did it take */
+					failed_sends,
+					thruput,                /* how fast did it go */
+					((print_headers) ||
+					 (result_brand == NULL)) ? "" : result_brand);
+				break;
 			}
 		}
 		if (verbosity > 1) {
 			fprintf(where,
-							ksink_fmt,
-							"Bytes",
-							"Bytes",
-							"Bytes",
-							local_send_align,
-							remote_recv_align,
-							local_send_offset,
-							remote_recv_offset,
-							bytes_sent,
-							bytes_sent / (double)local_send_calls,
-							local_send_calls,
-							bytes_sent / (double)remote_receive_calls,
-							remote_receive_calls);
+				ksink_fmt,
+				"Bytes",
+				"Bytes",
+				"Bytes",
+				local_send_align,
+				remote_recv_align,
+				local_send_offset,
+				remote_recv_offset,
+				bytes_sent,
+				bytes_sent / (double)local_send_calls,
+				local_send_calls,
+				bytes_sent / (double)remote_receive_calls,
+				remote_receive_calls);
 #ifdef WANT_HISTOGRAM
 			fprintf(where,"\n\nHistogram of time spent in send() call.\n");
-							HIST_report(time_hist);
+			HIST_report(time_hist);
 #endif /* WANT_HISTOGRAM */
 			fflush(where);
 		}
@@ -7649,6 +7680,7 @@ OMNI and Migrated BSD Sockets Test Options:\n\
     -T protocol       Explicitly set data connection protocol. Default is\n\
                       implicit based on other settings\n\
     -u uuid           Use the supplied string as the UUID for this test.\n\
+    -z                Set the socket to non-blocking\n\
     -4                Use AF_INET (eg IPv4) on both ends of the data conn\n\
     -6                Use AF_INET6 (eg IPv6) on both ends of the data conn\n\
 \n\
@@ -7674,7 +7706,7 @@ scan_omni_args(int argc, char *argv[])
 
 {
 
-#define OMNI_ARGS "Bb:cCd:De:FgG:hH:i:IkK:l:L:m:M:nNoOp:P:r:R:s:S:t:T:u:Vw:W:46"
+#define OMNI_ARGS "Bb:cCd:De:FgG:hH:i:IkK:l:L:m:M:nNoOp:P:r:R:s:S:t:T:u:Vw:W:z46"
 
   extern char	*optarg;	  /* pointer to option string	*/
 
@@ -8029,6 +8061,9 @@ scan_omni_args(int argc, char *argv[])
       /* both send and receive "widths" but for now */
       /* it is just the sending *_STREAM. */
       send_width = convert(optarg);
+      break;
+    case 'z':
+      non_blocking = 1;
       break;
     case 'V' :
       /* we want to do copy avoidance and will set */
